@@ -3,6 +3,7 @@ channel attackerBuffer 3;
 
 var CP_connects = Nobody; 
 var SD_connects = Nobody; 
+var Attacker_connects = Nobody;
 var attacker_server_connected = false; 
 
 enum{ 
@@ -24,13 +25,25 @@ enum{
  Nobody 
 }; 
 
- 
+
+// Attacker Behaviour
+
+AttackerAsSD() = network?SD.LightsState -> attackerBuffer!SD.LightsState -> AttackerProc();
+
+AttackerAsCPDiscovery() = 
+network!Attacker.GetService ->
+network?StateService ->
+{Attacker_connects = SD}
+
+
 
 // Stage 1: Discover smart devices 
 
 CPDiscovery() =  
  network!CP.GetService -> 
- network?StateService -> CPConfiguration(); 
+ network?StateService ->
+ {CP_connects = SD}
+ -> CPConfiguration();
 
   
 
