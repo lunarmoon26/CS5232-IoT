@@ -1,21 +1,119 @@
-﻿// Enum Message Types
-enum {
-MsgGetService,
-MsgStateService,
-MsgSetAccessPoint,
-MsgStateAccessPoint,
-MsgConfigured,
-MsgSetPowerRequest,
-MsgSuccess,
-MsgSetColorRequest,
-MsgGetLights,
-MsgLightsState
-};
+﻿channel network 0; 
+channel attackerBuffer 3; 
 
+var CP_connects = Nobody; 
+var SD_connects = Nobody; 
+var attacker_server_connected = false; 
 
-P() = a -> Skip;
-Q() = b -> Q();
-System() = P() ||| Q();
+enum{ 
+ GetService, 
+ StateService, 
+ SetAccessPoint, 
+ StateAccessPoint, 
+ Configured, 
+ SetPowerRequest, 
+ Success, 
+ SetColorRequest, 
+ GetLights, 
+ LightsState, 
+ executeCommand, 
+ CP, 
+ SD, 
+ Attacker, 
+ CP_SD_key,  
+ attacker_SD_key, 
+ Nobody 
+}; 
 
+ 
 
-#assert System() deadlockfree;
+// Stage 1: Discover smart devices 
+
+CPDiscovery() =  
+ network!GetService -> 
+ network?StateService -> CPConfiguration(); 
+
+  
+
+SDDiscovery() =  
+ network?GetService -> 
+ network!StateService -> SDConfiguration(); 
+
+  
+
+//SystemStage1() = CPDiscovery()|||SDDiscovery();  
+
+ 
+
+// Stage 2: Setup connections with smart devices 
+
+CPConfiguration() =  
+ network!SetAccessPoint -> 
+ network?StateAccessPoint -> 
+ network?StateService.Configured -> 
+ network!SetPowerRequest -> CPSendCommand(); 
+
+  
+
+SDConfiguration() = 
+ network?SetAccessPoint -> 
+ network!StateAccessPoint -> 
+ network!StateService.Configured -> 
+ network?SetPowerRequest -> SDReceiveCommand(); 
+
+//SystemStage2() = CPConfiguration() ||| SDConfiguration(); 
+
+// Stage 3: Send command to smart devices 
+
+CPSendCommand() = CPSetPowerRequest()[]CPSetColorRequest()[]CPGetLights(); 
+
+ 
+
+CPSetPowerRequest() =  
+ network!SetPowerRequest -> CPCommandSuccess(); 
+
+  
+
+CPSetColorRequest() = 
+
+ network!SetColorRequest -> CPCommandSuccess(); 
+
+  
+
+CPGetLights() =  
+ network!GetLights ->  
+ network?LightsState -> CPSendCommand(); 
+
+CPCommandSuccess() = network?Success-> CPSendCommand(); 
+
+ 
+SDReceiveCommand() = SDSetPowerRequest()[]SDSetColorRequest()[]SDGetLights(); 
+
+ 
+SDSetPowerRequest() =  
+ network!SetPowerRequest -> SDCommandSuccess(); 
+
+  
+
+SDSetColorRequest() = 
+ network!SetColorRequest -> SDCommandSuccess(); 
+
+  
+
+SDGetLights() =  
+ network!GetLights ->  
+ network?LightsState -> SDReceiveCommand(); 
+
+SDCommandSuccess() = network!Success-> SDReceiveCommand(); 
+ 
+
+system = SDReceiveCommand() ||| CPSendCommand(); 
+
+ 
+
+  
+
+//#assert SystemStage1() deadlockfree; 
+//#assert SystemStage2() deadlockfree; 
+
+#assert system deadlockfree; 
