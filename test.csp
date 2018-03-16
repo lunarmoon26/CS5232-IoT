@@ -3,6 +3,7 @@ channel attackerBuffer 3;
 
 var CP_connects = Nobody; 
 var SD_connects = Nobody; 
+var Attacker_connects = Nobody;
 var attacker_server_connected = false; 
 
 enum{ 
@@ -19,89 +20,118 @@ enum{
  CP, 
  SD, 
  Attacker, 
- CP_SD_key,  
- attacker_SD_key, 
  Nobody 
 }; 
 
- 
+
+// Attacker Behaviour
+
+//AttackerProc() = AttackerAsSD()[]AttackerAsCPDiscovery()
+
+//AttackerAsSD() = network?SD.LightsState -> attackerBuffer!SD.LightsState -> AttackerProc();
+
+AttackerAsCPDiscovery() = 
+network!Attacker.GetService ->
+network?StateService ->
+attacker_SD_connected{Attacker_connects = SD} ->
+AttackerAsCPConfiguration() 
+
+
+AttackerAsCPConfiguration() =
+ network!Attacker.SetAccessPoint -> 
+ network?StateAccessPoint -> 
+ network?StateService.Configured ->
+ AttackerSendCommand();
+				   		
+ AttackerSetPowerRequest() =  
+ network!Attacker.SetPowerRequest ->
+ AttackerCommandSuccess();
+
+  
+ AttackerSetColorRequest() = 
+ network!Attacker.SetColorRequest -> 
+ AttackerCommandSuccess();
+
+ AttackerGetLights() =  
+ network!Attacker.GetLights ->  
+ network?LightsState -> 
+ AttackerSendCommand();				   		
+
+AttackerSendCommand() = AttackerSetPowerRequest()[] AttackerSetColorRequest()[]AttackerGetLights();
+AttackerCommandSuccess() = network?Success-> AttackerSendCommand();
 
 // Stage 1: Discover smart devices 
 
+CPNextStage() = CPConfiguration()[]CPSendCommand()
+
 CPDiscovery() =  
  network!CP.GetService -> 
- network?StateService -> CPConfiguration(); 
+ network?StateService ->
+ CP_SD_connected{CP_connects = SD} -> CPNextStage();
 
-  
+
+SDNextStage() = SDConfiguration()[]SDSendCommand();
 
 SDDiscovery() =  
- network?GetService -> 
- network!StateService -> SDConfiguration(); 
+ network?x.GetService -> 
+ network!StateService ->
+ SDNextStage();
 
-  
-
-//SystemStage1() = CPDiscovery()|||SDDiscovery();  
+ 
+SystemStage1 = CPDiscovery()|||SDDiscovery();  
 
  
 
 // Stage 2: Setup connections with smart devices 
 
 CPConfiguration() =  
- network!SetAccessPoint -> 
+ network!CP.SetAccessPoint -> 
  network?StateAccessPoint -> 
- network?StateService.Configured -> 
- network!SetPowerRequest -> CPSendCommand(); 
+ network?StateService.Configured ->
+ CPSendCommand();
 
   
 
 SDConfiguration() = 
  network?SetAccessPoint -> 
  network!StateAccessPoint -> 
- network!StateService.Configured -> 
- network?SetPowerRequest -> SDReceiveCommand(); 
+ network!StateService.Configured ->
+ SDReceiveCommand();
 
-//SystemStage2() = CPConfiguration() ||| SDConfiguration(); 
+SystemStage2 = CPConfiguration() ||| SDConfiguration(); 
 
 // Stage 3: Send command to smart devices 
 
-CPSendCommand() = CPSetPowerRequest()[]CPSetColorRequest()[]CPGetLights(); 
+ CPSendCommand() = CPSetPowerRequest() [] CPSetColorRequest() [] CPGetLights();
 
- 
-
-CPSetPowerRequest() =  
- network!SetPowerRequest -> CPCommandSuccess();
-
-  
-
-CPSetColorRequest() = 
-
- network!SetColorRequest -> CPCommandSuccess(); 
+ CPSetPowerRequest() =  
+ network!CP.SetPowerRequest ->
+ CPCommandSuccess();
 
   
+ CPSetColorRequest() = 
+ network!CP.SetColorRequest -> 
+ CPCommandSuccess();
 
-CPGetLights() =  
- network!GetLights ->  
- network?LightsState -> CPSendCommand(); 
+ CPGetLights() =  
+ network!CP.GetLights ->  
+ network?LightsState -> 
+ CPSendCommand();
 
-CPCommandSuccess() = network?Success-> CPSendCommand(); 
+ CPCommandSuccess() = network?Success-> CPSendCommand();
 
  
 SDReceiveCommand() = SDSetPowerRequest()[]SDSetColorRequest()[]SDGetLights(); 
 
- 
 SDSetPowerRequest() =  
  network!x.SetPowerRequest ->
- SDExcuteCommand(x) ->
+ excuteCommand{SD_connects = x} ->
  SDCommandSuccess();
-
-  
 
 SDSetColorRequest() = 
  network!x.SetColorRequest -> 
- SDExcuteCommand(x) -> 
+  excuteCommand{SD_connects = x} -> 
  SDCommandSuccess();
-
-  
 
 SDGetLights() =  
  network!GetLights ->  
@@ -109,19 +139,11 @@ SDGetLights() =
  SDReceiveCommand();
 
 SDCommandSuccess() = network!Success-> SDReceiveCommand(); 
-
-SDExcuteCommand(x) = 
-	if(x == CP) {
-		SD_connects = CP;
-	} else {
-		SD_connects = Attacker;
-	}
-
  
 
 system = SDReceiveCommand() ||| CPSendCommand(); 
 
- 
+attackerSystem = SDReceiveCommand() ||| AttackerSendCommand();
 
   
 
@@ -131,3 +153,4 @@ system = SDReceiveCommand() ||| CPSendCommand();
 
 #assert system deadlockfree; 
 #assert system reaches violation;
+#assert attackerSystem reaches violation;
