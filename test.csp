@@ -1,7 +1,21 @@
-﻿#define N 2;
+﻿// Enum Message Types
+enum {
+MsgGetService,
+MsgStateService,
+MsgSetAccessPoint,
+MsgStateAccessPoint,
+MsgConfigured,
+MsgSetPowerRequest,
+MsgSuccess,
+MsgSetColorRequest,
+MsgGetLights,
+MsgLightsState
+};
 
 
 P() = a -> Skip;
 Q() = b -> Q();
 System() = P() ||| Q();
+
+
 #assert System() deadlockfree;
