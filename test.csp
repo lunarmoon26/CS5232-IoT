@@ -125,12 +125,12 @@ SDReceiveCommand() = SDSetPowerRequest()[]SDSetColorRequest()[]SDGetLights();
 
 SDSetPowerRequest() =  
  network!x.SetPowerRequest ->
- SDExcuteCommand(x) ->
+ excuteCommand{SD_connects = x} ->
  SDCommandSuccess();
 
 SDSetColorRequest() = 
  network!x.SetColorRequest -> 
- SDExcuteCommand(x) -> 
+  excuteCommand{SD_connects = x} -> 
  SDCommandSuccess();
 
 SDGetLights() =  
@@ -139,14 +139,6 @@ SDGetLights() =
  SDReceiveCommand();
 
 SDCommandSuccess() = network!Success-> SDReceiveCommand(); 
-
-SDExcuteCommand(x) = 
-	if(x == CP) {
-		SD_connects = CP;
-	} else {
-		SD_connects = Attacker;
-	}
-
  
 
 system = SDReceiveCommand() ||| CPSendCommand(); 
