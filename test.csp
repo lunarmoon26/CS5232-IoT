@@ -15,8 +15,7 @@ enum{
  Success, 
  SetColorRequest, 
  GetLights, 
- LightsState, 
- executeCommand, 
+ LightsState,  
  CP, 
  SD, 
  Attacker, 
@@ -30,7 +29,7 @@ enum{
 // Stage 1: Discover smart devices 
 
 CPDiscovery() =  
- network!GetService -> 
+ network!CP.GetService -> 
  network?StateService -> CPConfiguration(); 
 
   
@@ -70,7 +69,7 @@ CPSendCommand() = CPSetPowerRequest()[]CPSetColorRequest()[]CPGetLights();
  
 
 CPSetPowerRequest() =  
- network!SetPowerRequest -> CPCommandSuccess(); 
+ network!SetPowerRequest -> CPCommandSuccess();
 
   
 
@@ -91,20 +90,33 @@ SDReceiveCommand() = SDSetPowerRequest()[]SDSetColorRequest()[]SDGetLights();
 
  
 SDSetPowerRequest() =  
- network!SetPowerRequest -> SDCommandSuccess(); 
+ network!x.SetPowerRequest ->
+ SDExcuteCommand(x) ->
+ SDCommandSuccess();
 
   
 
 SDSetColorRequest() = 
- network!SetColorRequest -> SDCommandSuccess(); 
+ network!x.SetColorRequest -> 
+ SDExcuteCommand(x) -> 
+ SDCommandSuccess();
 
   
 
 SDGetLights() =  
  network!GetLights ->  
- network?LightsState -> SDReceiveCommand(); 
+ network?LightsState -> 
+ SDReceiveCommand();
 
 SDCommandSuccess() = network!Success-> SDReceiveCommand(); 
+
+SDExcuteCommand(x) = 
+	if(x == CP) {
+		SD_connects = CP;
+	} else {
+		SD_connects = Attacker;
+	}
+
  
 
 system = SDReceiveCommand() ||| CPSendCommand(); 
@@ -115,5 +127,7 @@ system = SDReceiveCommand() ||| CPSendCommand();
 
 //#assert SystemStage1() deadlockfree; 
 //#assert SystemStage2() deadlockfree; 
+#define violation SD_connects = Attacker && SD_connects == CP && CP_connects == SD;
 
 #assert system deadlockfree; 
+#assert system reaches violation;
