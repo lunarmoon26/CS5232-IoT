@@ -20,13 +20,13 @@ enum{
  CP, 
  SD, 
  Attacker, 
- CP_SD_key,  
- attacker_SD_key, 
  Nobody 
 }; 
 
 
 // Attacker Behaviour
+
+AttackerProc() = AttackerAsSD()[]AttackerAsCPDiscovery()
 
 AttackerAsSD() = network?SD.LightsState -> attackerBuffer!SD.LightsState -> AttackerProc();
 
@@ -35,25 +35,27 @@ network!Attacker.GetService ->
 network?StateService ->
 {Attacker_connects = SD}
 
+AttackerAsCPConfiguration()
 
 
 // Stage 1: Discover smart devices 
+CPNextStage() = CPConfiguration()[]CPSendCommand()
 
 CPDiscovery() =  
  network!CP.GetService -> 
  network?StateService ->
  {CP_connects = SD}
- -> CPConfiguration();
+ -> CPNextStage();
 
-  
+SDNextStage() = SDConfiguration()[]SDSendCommand()
+
 
 SDDiscovery() =  
  network?GetService -> 
- network!StateService -> SDConfiguration(); 
+ network!StateService -> SDNextStage(); 
 
-  
-
-//SystemStage1() = CPDiscovery()|||SDDiscovery();  
+ 
+SystemStage1 = CPDiscovery()|||SDDiscovery();  
 
  
 
@@ -73,33 +75,32 @@ SDConfiguration() =
  network!StateService.Configured -> 
  network?SetPowerRequest -> SDReceiveCommand(); 
 
-//SystemStage2() = CPConfiguration() ||| SDConfiguration(); 
+SystemStage2 = CPConfiguration() ||| SDConfiguration(); 
 
 // Stage 3: Send command to smart devices 
 
-CPSendCommand() = CPSetPowerRequest()[]CPSetColorRequest()[]CPGetLights(); 
+ CPSendCommand() = CPSetPowerRequest() -> 
+				   CPSetColorRequest() -> 
+				   CPGetLights();
 
- 
 
-CPSetPowerRequest() =  
- network!SetPowerRequest -> CPCommandSuccess();
-
-  
-
-CPSetColorRequest() = 
-
- network!SetColorRequest -> CPCommandSuccess(); 
+ CPSetPowerRequest() =  
+ network!CP.SetPowerRequest ->
+ CommandSuccess(CP);
 
   
+ CPSetColorRequest() = 
+ network!CP.SetColorRequest -> 
+ CommandSuccess(CP);
 
-CPGetLights() =  
- network!GetLights ->  
+ CPGetLights() =  
+ network!CP.GetLights ->  
  network?LightsState -> CPSendCommand(); 
 
-CPCommandSuccess() = network?Success-> CPSendCommand(); 
+ CommandSuccess(x) = network?x.Success-> CPSendCommand(); 
 
  
-SDReceiveCommand() = SDSetPowerRequest()[]SDSetColorRequest()[]SDGetLights(); 
+ SDReceiveCommand() = SDSetPowerRequest()[]SDSetColorRequest()[]SDGetLights(); 
 
  
 SDSetPowerRequest() =  
