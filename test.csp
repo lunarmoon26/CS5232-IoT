@@ -1,0 +1,7 @@
+﻿#define N 2;
+
+
+P() = a -> Skip;
+Q() = b -> Q();
+System() = P() ||| Q();
+#assert System() deadlockfree;
