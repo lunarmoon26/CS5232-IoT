@@ -37,11 +37,11 @@ AttackerAsCPConfiguration() = network!Attacker.SetAccessPoint -> network?StateAc
 
 AttackerAsCPSendCommand() = AttackerSetPowerRequest()[] AttackerSetColorRequest()[]AttackerGetLights();
 AttackerSetPowerRequest() = network!Attacker.SetPowerRequest -> network?Success-> 
-							attackerExecuteCommand{attacker_execute_command = true} -> AttackerProc();
+							attackerExecuteCommand{attacker_execute_command = true} -> AttackerAsCPSendCommand();
 AttackerSetColorRequest() = network!Attacker.SetColorRequest -> network?Success->
-							attackerExecuteCommand{attacker_execute_command = true} -> AttackerProc();
+							attackerExecuteCommand{attacker_execute_command = true} -> AttackerAsCPSendCommand();
 AttackerGetLights() = network!Attacker.GetLights -> network?LightsState -> 
-							attackerExecuteCommand{attacker_execute_command = true} -> AttackerProc();				   		
+							attackerExecuteCommand{attacker_execute_command = true} -> AttackerAsCPSendCommand();				   		
 
 AttackerRelay() = attackerBuffer?StateService -> network!CP -> AttackerProc()
                [] attackerBuffer?StateAccessPoint -> network!CP -> AttackerProc();
@@ -58,9 +58,9 @@ CPConfiguration() = network!CP.SetAccessPoint -> network?StateAccessPoint -> net
                     
 CPSendCommand() = CPSetPowerRequest() [] CPSetColorRequest() [] CPGetLights();
 
-CPSetPowerRequest() = network!CP.SetPowerRequest -> network?Success-> CPProc();
-CPSetColorRequest() = network!CP.SetColorRequest -> network?Success-> CPProc();
-CPGetLights() = network!CP.GetLights -> network?LightsState -> CPProc();
+CPSetPowerRequest() = network!CP.SetPowerRequest -> network?Success-> CPSendCommand();
+CPSetColorRequest() = network!CP.SetColorRequest -> network?Success-> CPSendCommand();
+CPGetLights() = network!CP.GetLights -> network?LightsState -> CPSendCommand();
                   
 
 SDProc() = SDDiscovery();
@@ -76,7 +76,7 @@ SDSetPowerRequest() = network?x.SetPowerRequest -> executecommand{SD_connects = 
 					  SDProc();
 SDSetColorRequest() = network?x.SetColorRequest -> executecommand{SD_connects = x} -> network!Success-> 
 				      SDProc(); 
-SDGetLights() = network?x.GetLights -> network!LightsState -> SDProc();
+SDGetLights() = network?x.GetLights -> network!LightsState -> SDReceiveCommand();
 
 system = AttackerProc() ||| CPProc() ||| SDProc();
  

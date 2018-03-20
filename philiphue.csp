@@ -1,0 +1,34 @@
+﻿channel zigbee 0;
+channel wifi 0;
+channel attackerbuffer 3;
+
+enum{
+	BeaconRequest,
+	PanID, HubID, DeviceID, AssoPermit,
+	UPnPMsearchRequest, CPIP, ServerName, HubIP,
+	x,
+	SearchLightRequest, RequestSuccess, 
+	ScanRequest, ScanResponse,
+	IdentityRequest, NetworkJoinRequest, NetworkJoinResponse, 
+	JoinNearestDeviceRequest,
+	LinkScanRequest,
+	LinkIdentifyRequest,
+	RequestLightResult, LightNo, LightName,
+	GetInfoRequest,
+	Configs, Lights, Whitelist,
+	DeleteLightRequest,
+	AdminSuccess,
+	DeleteUserIDRequest,
+	LinkButtonTrue,
+	Controlcmd,
+	EncryptedControlcmd,
+	ACK,
+	ControlCmdSuccess,
+	CP,
+	HS,
+	ZFE,
+	SD,
+	Nobody
+}
+
+var CP_Connects = Nobody;
