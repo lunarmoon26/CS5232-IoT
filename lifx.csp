@@ -1,0 +1,44 @@
+﻿channel wifi 0; 
+channel openwifi 0;
+channel attackerBuffer 3; 
+
+var CP_connects = Nobody; 
+var SD_connects = Nobody; 
+var Attacker_connects = Nobody;
+var attacker_execute_command = false;
+
+var wifiConfigured = false;
+
+
+enum { GetService, StateService, Configured, Station,Username, Password,EncodedPassword, 
+ 	   SetPowerRequest, Success, SetColorRequest, GetLights, LightsState,  
+	   CP, SD, Attacker, Nobody}; 
+	   
+	   
+// Process through channel wifi
+
+CP_Discovery_WIFI() = wifi!CP.GetService -> wifi?StateService.Configured ->
+			    CP_SendCommand_WIFI();
+			    
+			    
+CP_SendCommand_WIFI() = CP_SetPowerRequest_WIFI() [] CP_SetColorRequest_WIFI() [] CP_GetLights_WIFI();
+
+CP_SetPowerRequest_WIFI() = wifi!CP.SetPowerRequest -> wifi?Success-> CPSendCommand_WIFI();
+CP_SetColorRequest_WIFI() = wifi!CP.SetColorRequest -> wifi?Success-> CPSendCommand_WIFI();
+CP_GetLights_WIFI() = wifi!CP.GetLights -> wifi?LightsState -> CPSendCommand_WIFI();		    
+
+
+
+SD_Discovery_WIFI() = wifi?x.GetService -> wifi!StateService -> SD_ExecuteCommand_WIFI();			    
+			
+			
+SDReceiveCommand() = SDSetPowerRequest()[]SDSetColorRequest()[]SDGetLights(); 
+
+SDSetPowerRequest() = wifi?x.SetPowerRequest -> executecommand{SD_connects = x} ->wifi!Success-> 
+					  SDProc();
+SDSetColorRequest() = wifi?x.SetColorRequest -> executecommand{SD_connects = x} -> wifi!Success-> 
+				      SDProc(); 
+SDGetLights() = wifi?x.GetLights -> wifi!LightsState -> SDReceiveCommand();
+			    
+
+// Process through channel openwifi

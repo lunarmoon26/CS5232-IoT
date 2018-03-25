@@ -1,19 +1,21 @@
-﻿channel network 0; 
+﻿channel wifi 0; 
+channel openwifi 0;
 channel attackerBuffer 3; 
 
 var CP_connects = Nobody; 
 var SD_connects = Nobody; 
 var Attacker_connects = Nobody;
-
 var attacker_execute_command = false;
 
 
-enum{ 
+enum { 
  GetService, 
  StateService, 
- SetAccessPoint, 
- StateAccessPoint, 
  Configured, 
+ Station,
+ Username,
+ Password,
+ EncodedPassword, 
  SetPowerRequest, 
  Success, 
  SetColorRequest, 
@@ -25,43 +27,65 @@ enum{
  Nobody 
 }; 
 
-AttackerProc() = AttackerAsCPDiscovery()[]AttackerAsCPConfiguration()[]AttackerRelay();
 
-AttackerAsCPDiscovery() = network!Attacker.GetService -> network?StateService -> attacker_SD_connected{Attacker_connects = SD} ->
-						AttackerNextStage();
-AttackerNextStage() = AttackerAsCPConfiguration()[]AttackerAsCPSendCommand();
+////Attacker Behaviour
+//AttackerProc() = AttackerAsCPDiscovery()[]AttackerAsCPConfiguration()[]AttackerRelay();
+//
+//AttackerAsCPDiscovery() = network!Attacker.GetService -> network?StateService -> attacker_SD_connected{Attacker_connects = SD} ->
+//						AttackerNextStage();
+//AttackerNextStage() = AttackerAsCPConfiguration()[]AttackerAsCPSendCommand();
+//
+//AttackerAsCPConfiguration() = network!Attacker.SetAccessPoint -> network?StateAccessPoint -> 
+//						network?StateService.Configured -> attacker_SD_connected{Attacker_connects = SD} ->
+//						AttackerAsCPSendCommand();
+//
+//AttackerAsCPSendCommand() = AttackerSetPowerRequest()[] AttackerSetColorRequest()[]AttackerGetLights();
+//
+//AttackerSetPowerRequest() = network!Attacker.SetPowerRequest -> network?Success-> 
+//							attackerExecuteCommand{attacker_execute_command = true} -> AttackerAsCPSendCommand();
+//AttackerSetColorRequest() = network!Attacker.SetColorRequest -> network?Success->
+//							attackerExecuteCommand{attacker_execute_command = true} -> AttackerAsCPSendCommand();
+//AttackerGetLights() = network!Attacker.GetLights -> network?LightsState -> 
+//							attackerExecuteCommand{attacker_execute_command = true} -> AttackerAsCPSendCommand();				   		
+//
+//AttackerRelay() = attackerBuffer?StateService -> network!CP -> AttackerProc()
+//               [] attackerBuffer?StateAccessPoint -> network!CP -> AttackerProc();
 
-AttackerAsCPConfiguration() = network!Attacker.SetAccessPoint -> network?StateAccessPoint -> 
-						network?StateService.Configured -> attacker_SD_connected{Attacker_connects = SD} ->
-						AttackerAsCPSendCommand();
 
-AttackerAsCPSendCommand() = AttackerSetPowerRequest()[] AttackerSetColorRequest()[]AttackerGetLights();
-AttackerSetPowerRequest() = network!Attacker.SetPowerRequest -> network?Success-> 
-							attackerExecuteCommand{attacker_execute_command = true} -> AttackerAsCPSendCommand();
-AttackerSetColorRequest() = network!Attacker.SetColorRequest -> network?Success->
-							attackerExecuteCommand{attacker_execute_command = true} -> AttackerAsCPSendCommand();
-AttackerGetLights() = network!Attacker.GetLights -> network?LightsState -> 
-							attackerExecuteCommand{attacker_execute_command = true} -> AttackerAsCPSendCommand();				   		
 
-AttackerRelay() = attackerBuffer?StateService -> network!CP -> AttackerProc()
-               [] attackerBuffer?StateAccessPoint -> network!CP -> AttackerProc();
 
 CPProc() = CPDiscovery(); 
 
-CPDiscovery() = network!CP.GetService -> network?StateService ->CP_SD_connected{CP_connects = SD} -> 
+CPDiscovery_WIFI() = network!CP.GetService -> network?StateService ->CP_SD_connected{CP_connects = SD} -> 
 			    CPNextStage();
 			    
-CPNextStage() = CPConfiguration()[]CPSendCommand();
+CPNextStage_WIFI() = CPConfiguration()[]CPSendCommand();
 
-CPConfiguration() = network!CP.SetAccessPoint -> network?StateAccessPoint -> network?StateService.Configured ->
-                    CPSendCommand();
+CPConfiguration_WIFI() = network!CP.SetAccessPoint -> network?StateAccessPoint -> network?StateService.Configured ->
+                    CPSendCommand_WIFI();
                     
-CPSendCommand() = CPSetPowerRequest() [] CPSetColorRequest() [] CPGetLights();
+CPSendCommand_WIFI() = CPSetPowerRequest_WIFI() [] CPSetColorRequest_WIFI() [] CPGetLights_WIFI();
 
-CPSetPowerRequest() = network!CP.SetPowerRequest -> network?Success-> CPSendCommand();
-CPSetColorRequest() = network!CP.SetColorRequest -> network?Success-> CPSendCommand();
-CPGetLights() = network!CP.GetLights -> network?LightsState -> CPSendCommand();
-                  
+CPSetPowerRequest_WIFI() = network!CP.SetPowerRequest -> network?Success-> CPSendCommand_WIFI();
+CPSetColorRequest_WIFI() = network!CP.SetColorRequest -> network?Success-> CPSendCommand_WIFI();
+CPGetLights_WIFI() = network!CP.GetLights -> network?LightsState -> CPSendCommand_WIFI();
+ 
+CPDiscovery_OPENWIFI() = network!CP.GetService -> network?StateService ->CP_SD_connected{CP_connects = SD} -> 
+			    CPNextStage_OPENWIFI();
+			    
+CPNextStage_OPENWIFI() = CPConfiguration_OPENWIFI()[]CPSendCommand_OPENWIFI();
+
+CPConfiguration_OPENWIFI() = network!CP.SetAccessPoint -> network?StateAccessPoint -> network?StateService.Configured ->
+                    CPSendCommand_OPENWIFI();
+                    
+CPSendCommand_OPENWIFI() = CPSetPowerRequest_OPENWIFI() [] CPSetColorRequest_OPENWIFI() [] CPGetLights_OPENWIFI();
+
+CPSetPowerRequest_OPENWIFI() = network!CP.SetPowerRequest -> network?Success-> CPSendCommand_OPENWIFI();
+CPSetColorRequest_OPENWIFI() = network!CP.SetColorRequest -> network?Success-> CPSendCommand_OPENWIFI();
+CPGetLights_OPENWIFI() = network!CP.GetLights -> network?LightsState -> CPSendCommand_OPENWIFI();
+  
+
+
 
 SDProc() = SDDiscovery();
 
@@ -78,8 +102,8 @@ SDSetColorRequest() = network?x.SetColorRequest -> executecommand{SD_connects = 
 				      SDProc(); 
 SDGetLights() = network?x.GetLights -> network!LightsState -> SDReceiveCommand();
 
-system = AttackerProc() ||| CPProc() ||| SDProc();
- 
+//system = AttackerProc() ||| CPProc() ||| SDProc();
+ system = CPProc() ||| SDProc();
 #define violation  Attacker_connects == SD && SD_connects == Attacker && attacker_execute_command == true;
 
 #assert system deadlockfree; 
