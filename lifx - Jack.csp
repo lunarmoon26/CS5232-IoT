@@ -1,0 +1,157 @@
+﻿channel wifi 0; 
+channel openWifi 0;
+channel attackerBuffer 3; 
+
+var CP_connects = Nobody; 
+var SD_connects = Nobody; 
+var Attacker_connects = Nobody;
+var attacker_server_connected = false; 
+
+enum{ 
+ GetService, 
+ StateService, 
+ SetAccessPoint, 
+ StateAccessPoint, 
+ Configured, 
+ SetPowerRequest, 
+ Success, 
+ SetColorRequest, 
+ GetLights, 
+ LightsState,  
+ CP, 
+ SD, 
+ Attacker, 
+ Nobody 
+}; 
+
+
+// Attacker Behaviour
+
+//AttackerProc() = AttackerAsSD()[]AttackerAsCPDiscovery()
+
+//AttackerAsSD() = network?SD.LightsState -> attackerBuffer!SD.LightsState -> AttackerProc();
+
+//AttackerAsCPDiscovery() = 
+//network!Attacker.GetService ->
+//network?StateService ->
+//attacker_SD_connected{Attacker_connects = SD} ->
+//AttackerAsCPConfiguration() 
+//
+//
+//AttackerAsCPConfiguration() =
+// network!Attacker.SetAccessPoint -> 
+// network?StateAccessPoint -> 
+// network?StateService.Configured ->
+// AttackerSendCommand();
+//				   		
+// AttackerSetPowerRequest() =  
+// network!Attacker.SetPowerRequest ->
+// AttackerCommandSuccess();
+//
+//  
+// AttackerSetColorRequest() = 
+// network!Attacker.SetColorRequest -> 
+// AttackerCommandSuccess();
+//
+// AttackerGetLights() =  
+// network!Attacker.GetLights ->  
+// network?LightsState -> 
+// AttackerSendCommand();				   		
+//
+//AttackerSendCommand() = AttackerSetPowerRequest()[] AttackerSetColorRequest()[]AttackerGetLights();
+//AttackerCommandSuccess() = network?Success-> AttackerSendCommand();
+
+// Stage 1: Discover smart devices 
+
+CPDiscovered() = CPConfiguration()[]CPSendCommand();
+
+CPDiscovery() =  
+ openWifi!CP.GetService -> 
+ openWifi?StateService ->
+ CP_SD_connected{CP_connects = SD} -> CPDiscovered();
+
+
+SDDiscovered() = SDConfiguration()[]SDReceiveCommand();
+
+SDDiscovery() =  
+ openWifi?x.GetService -> 
+ openWifi!StateService ->
+ SDDiscovered();
+
+ 
+SystemStage1 = CPDiscovery()|||SDDiscovery();  
+
+ 
+
+// Stage 2: Setup connections with smart devices 
+
+CPConfiguration() =  
+ wifi!CP.SetAccessPoint -> 
+ wifi?StateAccessPoint -> 
+ wifi?StateService.Configured ->
+ CPSendCommand();
+
+  
+
+SDConfiguration() = 
+ wifi?SetAccessPoint -> 
+ wifi!StateAccessPoint -> 
+ wifi!StateService.Configured ->
+ SDReceiveCommand();
+
+SystemStage2 = CPConfiguration() ||| SDConfiguration(); 
+
+// Stage 3: Send command to smart devices 
+
+ CPSendCommand() = CPSetPowerRequest() [] CPSetColorRequest() [] CPGetLights();
+
+ CPSetPowerRequest() =  
+ openWifi!CP.SetPowerRequest ->
+ CPCommandSuccess();
+
+  
+ CPSetColorRequest() = 
+ openWifi!CP.SetColorRequest -> 
+ CPCommandSuccess();
+
+ CPGetLights() =  
+ openWifi!CP.GetLights ->  
+ openWifi?LightsState -> 
+ CPSendCommand();
+
+ CPCommandSuccess() = openWifi?Success-> CPSendCommand();
+
+ 
+SDReceiveCommand() = SDSetPowerRequest()[]SDSetColorRequest()[]SDGetLights(); 
+
+SDSetPowerRequest() =  
+ openWifi?x.SetPowerRequest ->
+ excuteCommand{SD_connects = x} ->
+ SDCommandSuccess();
+
+SDSetColorRequest() = 
+ openWifi?x.SetColorRequest -> 
+ excuteCommand{SD_connects = x} -> 
+ SDCommandSuccess();
+
+SDGetLights() =  
+ openWifi?x.GetLights ->  
+ openWifi!LightsState -> 
+ SDReceiveCommand();
+
+SDCommandSuccess() = openWifi!Success-> SDReceiveCommand(); 
+ 
+
+system = SDReceiveCommand() ||| CPSendCommand(); 
+
+//attackerSystem = SDReceiveCommand() ||| AttackerSendCommand();
+
+  
+
+//#assert SystemStage1() deadlockfree; 
+//#assert SystemStage2() deadlockfree; 
+//#define violation SD_connects = Attacker && SD_connects == CP && CP_connects == SD;
+
+#assert system deadlockfree; 
+//#assert system reaches violation;
+//#assert attackerSystem reaches violation;
