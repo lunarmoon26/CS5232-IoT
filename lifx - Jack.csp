@@ -1,6 +1,5 @@
-﻿channel wifi 0; 
-channel openWifi 0;
-channel attackerBuffer 3; 
+﻿channel attackerBuffer 3; 
+channel network[2] 0; // 0 as openwifi, 1 as wifi
 
 var CP_connects = Nobody; 
 var SD_connects = Nobody; 
@@ -80,17 +79,17 @@ CPDiscovery() =
 	};
 
 CPConfiguration() =  
-  openWifi!CP.GetService -> 
-  openWifi?StateService ->
+  network[0]!CP.GetService -> 
+  network[0]?StateService ->
   CPDirectConnect();
   
-CPDirectConnect() = CPConfigWifi() [] CPSendCommandDirect();
+CPDirectConnect() = CPConfigWifi() [] CPSendCommand(0);
 
 
 CPConfigured() =  
-  wifi!CP.GetService -> 
-  wifi?StateService.Configured ->
-  CPSendCommand();
+  network[1]!CP.GetService -> 
+  network[1]?StateService.Configured ->
+  CPSendCommand(1);
 
 SDProc = SDDiscovery();
 
@@ -103,17 +102,17 @@ SDDiscovery() =
 	};
 
 SDConfiguration() =  
-  openWifi?x.GetService -> 
-  openWifi!StateService ->
+  network[0]?x.GetService -> 
+  network[0]!StateService ->
   SDDirectConnect();
   
-SDDirectConnect() = SDConfigWifi() [] SDReceiveCommandDirect();
+SDDirectConnect() = SDConfigWifi() [] SDReceiveCommand(0);
 
 
 SDConfigured() =  
-  wifi?x.GetService -> 
-  wifi!StateService.Configured ->
-  SDReceiveCommand();
+  network[1]?x.GetService -> 
+  network[1]!StateService.Configured ->
+  SDReceiveCommand(1);
 
 SystemStage1 = CPDiscovery()|||SDDiscovery();  
 
@@ -123,8 +122,8 @@ SystemStage1 = CPDiscovery()|||SDDiscovery();
 
 CPConfigWifi() =
   if (!SD_connected_to_wifi) {   
-    openWifi!Station.Username.Password -> 
-    openWifi?Station.Username.PasswordEncoded -> 
+    network[0]!Station.Username.Password -> 
+    network[0]?Station.Username.PasswordEncoded -> 
     CPDiscovery()
   } 
   else {
@@ -134,7 +133,7 @@ CPConfigWifi() =
 
 SDConfigWifi() =
   if (!SD_connected_to_wifi) {   
-    openWifi?Station.x.y -> 
+    network[0]?Station.x.y -> 
     SDConnectToWifi(x, y)
   } 
   else {
@@ -144,7 +143,7 @@ SDConfigWifi() =
 SDConnectToWifi(x, y) =
   if (x == Username && y == Password) {   
     SDConnectedToWifi{SD_connected_to_wifi = true;} -> 
-    openWifi!Station.Username.PasswordEncoded -> SDDiscovery()
+    network[0]!Station.Username.PasswordEncoded -> SDDiscovery()
   } 
   else {
     SDDiscovery()
@@ -156,89 +155,50 @@ SystemStage2 = CPConfigWifi() ||| SDConfigWifi();
 
 // Stage 3: Send command to smart devices 
 
- CPSendCommandDirect() = CPSetPowerRequestDirect() [] CPSetColorRequestDirect() [] CPGetLightsDirect();
+ CPSendCommand(i) = CPSetPowerRequest(i) [] CPSetColorRequest(i) [] CPGetLights(i);
 
- CPSetPowerRequestDirect() =  
- openWifi!CP.SetPowerRequest ->
- CPCommandSuccess();
-
-  
- CPSetColorRequestDirect() = 
- openWifi!CP.SetColorRequest -> 
- CPCommandSuccessDirect();
-
- CPGetLightsDirect() =  
- openWifi!CP.GetLights ->  
- openWifi?LightsState -> 
- CPSendCommand();
-
- CPCommandSuccessDirect() = openWifi?Success-> CPSendCommandDirect();
-
-
- CPSendCommand() = CPSetPowerRequest() [] CPSetColorRequest() [] CPGetLights();
-
- CPSetPowerRequest() =  
- wifi!CP.SetPowerRequest ->
- CPCommandSuccess();
+ CPSetPowerRequest(i) =  
+ network[i]!CP.SetPowerRequest ->
+ CPCommandSuccess(i);
 
   
- CPSetColorRequest() = 
- wifi!CP.SetColorRequest -> 
- CPCommandSuccess();
+ CPSetColorRequest(i) = 
+ network[i]!CP.SetColorRequest -> 
+ CPCommandSuccess(i);
 
- CPGetLights() =  
- wifi!CP.GetLights ->  
- wifi?LightsState -> 
- CPSendCommand();
+ CPGetLights(i) =  
+ network[i]!CP.GetLights ->  
+ network[i]?LightsState -> 
+ CPSendCommand(i);
 
- CPCommandSuccess() = wifi?Success-> CPSendCommand();
- 
+ CPCommandSuccess(i) = network[i]?Success-> CPSendCommand(i);
  
  
 
- SDReceiveCommandDirect() = SDSetPowerRequestDirect() [] SDSetColorRequestDirect() [] SDGetLightsDirect();
+ SDReceiveCommand(i) = SDSetPowerRequest(i) [] SDSetColorRequest(i) [] SDGetLights(i);
 
- SDSetPowerRequestDirect() =  
- openWifi?x.SetPowerRequest ->
- SDCommandSuccess();
-
-  
- SDSetColorRequestDirect() = 
- openWifi?x.SetColorRequest -> 
- SDCommandSuccessDirect();
-
- SDGetLightsDirect() =  
- openWifi?x.GetLights ->  
- openWifi!LightsState -> 
- SDReceiveCommand();
-
- SDCommandSuccessDirect() = openWifi!Success-> SDReceiveCommandDirect();
-
-
- SDReceiveCommand() = SDSetPowerRequest() [] SDSetColorRequest() [] SDGetLights();
-
- SDSetPowerRequest() =  
- wifi?x.SetPowerRequest ->
- SDCommandSuccess();
+ SDSetPowerRequest(i) =  
+ network[i]?x.SetPowerRequest ->
+ SDCommandSuccess(i);
 
   
- SDSetColorRequest() = 
- wifi?x.SetColorRequest -> 
- SDCommandSuccess();
+ SDSetColorRequest(i) = 
+ network[i]?x.SetColorRequest -> 
+ SDCommandSuccess(i);
 
- SDGetLights() =  
- wifi?x.GetLights ->  
- wifi!LightsState -> 
- SDReceiveCommand();
+ SDGetLights(i) =  
+ network[i]?x.GetLights ->  
+ network[i]!LightsState -> 
+ SDReceiveCommand(i);
 
- SDCommandSuccess() = wifi!Success-> SDReceiveCommand();
+ SDCommandSuccess(i) = network[i]!Success-> SDReceiveCommand(i);
  
 SystemStage3 = 
 	if(!SD_connected_to_wifi){
-	SDReceiveCommandDirect() ||| CPSendCommandDirect()
+	SDReceiveCommand(0) ||| CPSendCommand(0)
 	}
 	else{
-	SDReceiveCommand() ||| CPSendCommand()
+	SDReceiveCommand(1) ||| CPSendCommand(1)
 	};
 	
 
