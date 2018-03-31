@@ -1,34 +1,82 @@
 ﻿channel zigbee 0;
 channel wifi 0;
 channel attackerbuffer 3;
+var command;
+var SD_ZFE_Connected = false;
 
-enum{
-	BeaconRequest,
-	PanID, HubID, DeviceID, AssoPermit,
-	UPnPMsearchRequest, CPIP, ServerName, HubIP,
-	x,
-	SearchLightRequest, RequestSuccess, 
-	ScanRequest, ScanResponse,
-	IdentityRequest, NetworkJoinRequest, NetworkJoinResponse, 
-	JoinNearestDeviceRequest,
-	LinkScanRequest,
-	LinkIdentifyRequest,
-	RequestLightResult, LightNo, LightName,
-	GetInfoRequest,
-	Configs, Lights, Whitelist,
-	DeleteLightRequest,
-	AdminSuccess,
-	DeleteUserIDRequest,
-	LinkButtonTrue,
-	Controlcmd,
-	EncryptedControlcmd,
-	ACK,
-	ControlCmdSuccess,
-	CP,
-	HS,
-	ZFE,
-	SD,
-	Nobody
-}
+var x = false;
+
+#define hash(i) {var hash = i};
+
+enum {
+	BeaconRequest, PanID, HubID, DeviceID, AssoPermit,
+	UPnPMsearchRequest, CPIP, ServerName, HubIP, 
+	SearchLightRequest, RequestSuccess, ScanRequest, ScanResponse,
+	IdentifyRequest, NetworkJoinRequest, NetworkJoinResponse, 
+	JoinNearestDeviceRequest, LinkScanRequest, LinkIdentifyRequest,LinkNetworkJoinRequest,
+	RequestLightResult, LightNo, LightName, GetInfoRequest,
+	Configs, Lights, Whitelist, DeleteLightRequest,
+	AdminSuccess, DeleteUserIDRequest, LinkButtonTrue, 
+	Controlcmd, EncryptedControlcmd, ACK, ControlCmdSuccess, 
+	CP, HS, ZFE, SD, Nobody
+};
+
+enum {
+	TR1, TR2, TR3, TR4, TR5, TR6, TR7, TR8, TR9, TR10,
+	TR11, TR12, TR13, TR14, TR15, TR16, TR17, TR18, TR19, TR20,
+	TR21, TR22, TR23, TR24, TR25, TR26, TR27, TR28, TR29, TR30,
+	TR31, TR32, TR33, TR34, TR35, TR36, TR37, TR38
+};
+
 
 var CP_Connects = Nobody;
+
+//Discovery and pairing stage
+
+
+SD_Discovery() = zigbee!BeaconRequest -> zigbee?PanID.HubID.AssoPermit -> zigbee!PanID.DeviceID 
+				 -> zigbee?BeaconRequest -> zigbee!PanID.DeviceID.AssoPermit 
+				 -> SD_Config();
+				 
+ZFE_Discovery() = zigbee?BeaconRequest -> zigbee!PanID.HubID.AssoPermit -> zigbee?PanID.DeviceID 
+				 -> zigbee!BeaconRequest -> zigbee?PanID.DeviceID.AssoPermit 
+				 -> connection{SD_ZFE_Connected = true}
+				 -> ZFE_Config();
+
+
+CP_Discovery() = wifi!UPnPMsearchRequest -> wifi?CPIP.ServerName.HubIP.HubID 
+				-> CP_Config();
+				
+HS_Discovery() = wifi?UPnPMsearchRequest -> wifi!CPIP.ServerName.HubIP.HubID 
+				-> HS_Config();
+				
+
+
+
+SD_Auth() = zigbee?ScanRequest.PanID 
+			-> zigbee!HubID.PanID.ScanResponse 
+			-> zigbee?DeviceID.IdentifyRequest
+			-> executeCommand{command = IdentifyRequest} 
+			-> zigbee?DeviceID.PanID.LinkNetworkJoinRequest
+			-> zigbee!HubID.PanID.NetworkJoinResponse
+			-> SD_Config();
+			
+ZFE_Auth() = zigbee!ScanRequest.PanID 
+			-> zigbee?HubID.PanID.ScanResponse 
+			-> zigbee!DeviceID.IdentifyRequest 
+			-> zigbee!DeviceID.PanID.LinkNetworkJoinRequest
+			-> zigbee?HubID.PanID.NetworkJoinResponse
+			-> ZFE_Config();
+			
+	
+CP_Auth() = newnouce{x = true} -> wifi!HubIP.x ->  wifi?CPIP.hash(x) 
+			-> wifi!HubIP.hash(x).SearchLightRequest -> wifi?CPIP.RequestSuccess
+			-> 
+			
+
+
+SD_Ctrl() = zigbee?DeviceID.PanID.EncryptedControlcmd -> zigbee!HubIP.ACK -> SD_Ctrl();
+
+ZFE_Ctrl() = zigbee!DeviceID.PanID.EncryptedControlcmd -> zigbee?HubIP.ACK -> ZFE_Ctrl();
+
+
