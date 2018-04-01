@@ -2,38 +2,283 @@
 channel wifi 0;
 channel attackerbuffer 3;
 
-enum{
-	BeaconRequest,
-	PanID, HubID, DeviceID, AssoPermit,
-	UPnPMsearchRequest, CPIP, ServerName, HubIP,
-	x,
-	SearchLightRequest, RequestSuccess, 
-	ScanRequest, ScanResponse,
-	IdentityRequest, NetworkJoinRequest, NetworkJoinResponse, 
-	JoinNearestDeviceRequest,
-	LinkScanRequest,
-	LinkIdentifyRequest,
-	RequestLightResult, LightNo, LightName,
-	GetInfoRequest,
-	Configs, Lights, Whitelist,
-	DeleteLightRequest,
-	AdminSuccess,
-	DeleteUserIDRequest,
-	LinkButtonTrue,
-	Controlcmd,
-	EncryptedControlcmd,
-	ACK,
-	ControlCmdSuccess,
-	CP,
-	HS,
-	ZFE,
-	SD,
-	Nobody
-}
+enum {
+	BeaconRequest, PanID, HubID, DeviceID, AssoPermit,
+	UPnPMsearchRequest, CPIP, ServerName, HubIP, 
+	SearchLightRequest, RequestSuccess, ScanRequest, ScanResponse,
+	IdentifyRequest, NetworkJoinRequest, NetworkJoinResponse, LinkNetworkJoinResponse, 
+	JoinNearestDeviceRequest, LinkScanRequest, LinkScanResponse, 
+	LinkIdentifyRequest,LinkNetworkJoinRequest,
+	RequestLightResult, LightNo, LightName, GetInfoRequest, 
+	Configs, Lights, Whitelist, DeleteLightRequest,
+	AdminSuccess, DeleteUserIDRequest, LinkButtonTrue, 
+	Controlcmd, EncryptedControlcmd, ACK, ControlCmdSuccess, 
+	CP, HS, ZFE, SD, Nobody, hash, nonce, LinkBTrue, LinkBFalse
+};
 
 var CP_Connects = Nobody;
+var ZFE_Connects = Nobody;
+var SD_Connects = Nobody;
+var HS_Connects = Nobody;
 
 
-//====================Stage 1====================
+SD_Proc() = SD_Discovery();
+HS_Proc() = HS_Discovery();
+ZFE_Proc() = ZFE_Discovery();
+CP_Proc() = CP_Discovery();
 
-SDProc() = zigbee
+
+//====================S1: Discovery Stage====================
+
+SD_Discovery() = 
+	SD_NetworkDiscovery() [] 
+	SD_DeviceDiscovery();
+ZFE_Discovery() = 
+	ZFE_NetworkDiscovery() [] 
+	ZFE_DeviceDiscovery();
+
+SD_NetworkDiscovery() = 
+	zigbee!BeaconRequest -> 
+	zigbee?PanID.HubID.AssoPermit -> 
+	zigbee!PanID.DeviceID ->
+	SD_JoinNetwork();
+ 
+ZFE_NetworkDiscovery() = 
+	zigbee?BeaconRequest -> 
+	zigbee!PanID.HubID.AssoPermit -> 
+	zigbee?PanID.DeviceID ->
+	ZFE_JoinNetwork();
+
+SD_DeviceDiscovery() = 
+	zigbee!BeaconRequest -> 
+	zigbee?PanID.DeviceID.AssoPermit ->
+	SD_JoinDevice();
+
+ZFE_DeviceDiscovery() = 
+	zigbee?BeaconRequest -> 
+	zigbee!PanID.DeviceID.AssoPermit ->
+	ZFE_JoinDevice();
+
+CP_Discovery() = 
+	wifi!UPnPMsearchRequest -> 
+	wifi?CPIP.ServerName.HubIP.HubID -> 
+	CP_Auth();
+				
+HS_Discovery() = 
+	wifi?UPnPMsearchRequest -> 
+	wifi!CPIP.ServerName.HubIP.HubID -> 
+	HS_Auth();
+				
+
+SystemStage1() = SD_Discovery() ||| ZFE_Discovery() ||| CP_Discovery() ||| HS_Discovery();
+
+
+
+//====================S2: Authentication Stage====================
+
+// TR 9-10
+CP_Auth() = 
+	newnonce.nonce -> 
+	wifi!HubIP.nonce ->  
+	wifi?CPIP.hash.nonce ->
+	CP_SendRequest();
+	
+HS_Auth() = 
+	wifi?HubIP.x ->  
+	executeCommand.LinkBTrue -> 
+	wifi!CPIP.hash.x -> 
+	executeCommand.LinkBFalse -> 
+	HS_ReceiveRequest();
+
+// TR 11-17
+CP_SendSearchLightRequest() = 
+	wifi!HubIP.hash.nonce.SearchLightRequest -> 
+	wifi?CPIP.RequestSuccess -> 
+	CP_SendRequest();
+	
+HS_ReceiveSearchLightRequest() = 
+	wifi?HubIP.hash.x.SearchLightRequest -> 
+	wifi!CPIP.RequestSuccess -> 
+	ZFE_JoinNetwork();
+
+ZFE_JoinNetwork() = 
+	zigbee!ScanRequest.PanID -> 
+	zigbee?HubID.PanID.ScanResponse -> 
+	zigbee!DeviceID.IdentifyRequest -> 
+	zigbee!DeviceID.PanID.NetworkJoinRequest -> 
+	zigbee?HubID.PanID.NetworkJoinResponse -> 
+	HS_ReceiveRequest();
+
+SD_JoinNetwork() = 
+	zigbee?ScanRequest.PanID -> 
+	zigbee!HubID.PanID.ScanResponse -> 
+	zigbee?DeviceID.IdentifyRequest -> 
+	executeCommand.IdentifyRequest -> 
+	zigbee?DeviceID.PanID.NetworkJoinRequest -> 
+	zigbee!HubID.PanID.NetworkJoinResponse -> 
+	SD_ReceiveRequest();
+
+
+
+// TR 18-24
+CP_SendJoinNearestDeviceRequest() = 
+	wifi!HubIP.hash.nonce.JoinNearestDeviceRequest -> 
+	wifi?CPIP.RequestSuccess->
+	CP_SendRequest();
+
+HS_ReceiveJoinNearestDeviceRequest() = 
+	wifi?HubIP.hash.x.JoinNearestDeviceRequest -> 
+	wifi!CPIP.RequestSuccess -> 
+	ZFE_JoinDevice();
+	
+ZFE_JoinDevice() = 
+	zigbee!LinkScanRequest.PanID -> 
+	zigbee?HubID.PanID.LinkScanResponse -> 
+	zigbee!DeviceID.LinkIdentifyRequest -> 
+	zigbee!DeviceID.PanID.LinkNetworkJoinRequest -> 
+	zigbee?HubID.PanID.LinkNetworkJoinResponse -> 
+	HS_ReceiveRequest();
+	
+SD_JoinDevice() = 
+	zigbee?LinkScanRequest.PanID -> 
+	zigbee!HubID.PanID.LinkScanResponse -> 
+	zigbee?DeviceID.IdentifyRequest -> 
+	executeCommand.LinkIdentifyRequest -> 
+	zigbee?DeviceID.PanID.LinkNetworkJoinRequest -> 
+	zigbee!HubID.PanID.LinkNetworkJoinResponse -> 
+	SD_ReceiveRequest();
+
+
+CP_SendRequest() = 
+	CP_SendSearchLightRequest() []
+	CP_SendJoinNearestDeviceRequest() []
+	CP_SendControlRequest() []
+	CP_SendAdminControlRequest();
+	
+HS_ReceiveRequest() = 
+	HS_ReceiveSearchLightRequest() []
+	HS_ReceiveJoinNearestDeviceRequest() []
+	HS_ReceiveControlRequest() []
+	HS_ReceiveAdminControlRequest();	
+	
+SD_ReceiveRequest() = 
+	SD_JoinNetwork() []
+	SD_JoinDevice() []
+	SD_Controlcmd();
+	
+SystemStage2() = CP_Auth() ||| HS_Auth() ||| SD_ReceiveRequest();
+
+
+
+//====================S3: Control Stage====================
+
+
+CP_SendAdminControlRequest() = 
+	CP_GetInfoRequest() [] 
+	CP_DeleteLightRequest() [] 
+	CP_DeleteUserIDRequest() [] 
+	CP_LinkButtonTrue();
+	
+HS_ReceiveAdminControlRequest() = 
+	HS_GetInfoRequest() [] 
+	HS_DeleteLightRequest() []
+	HS_DeleteUserIDRequest() [] 
+	HS_LinkButtonTrue();
+	
+CP_SendControlRequest() = 
+	CP_RequestLightResult() [] 
+	CP_Controlcmd();
+	
+HS_ReceiveControlRequest() = 
+	HS_RequestLightResult() [] 
+	HS_Controlcmd();
+	
+
+// TR 25-26
+CP_RequestLightResult() = 
+	wifi!HubIP.hash.nonce.RequestLightResult -> 
+	wifi?CPIP.LightNo.LightName -> 
+	CP_SendControlRequest();
+	
+HS_RequestLightResult() = 
+	wifi?HubIP.hash.x.RequestLightResult -> 
+	wifi!CPIP.LightNo.LightName -> 
+	HS_ReceiveControlRequest();
+
+
+// TR 27-34
+CP_GetInfoRequest() = 
+	wifi!HubIP.hash.nonce.GetInfoRequest -> 
+	wifi?CPIP.Configs.Lights.Whitelist -> 
+	CP_SendAdminControlRequest();
+	
+HS_GetInfoRequest() = 
+	wifi?HubIP.hash.nonce.GetInfoRequest -> 
+	wifi!CPIP.Configs.Lights.Whitelist -> 
+	HS_ReceiveAdminControlRequest();
+
+
+CP_DeleteLightRequest() = 
+	wifi!HubIP.hash.nonce.DeleteLightRequest -> 
+	wifi?CPIP.AdminSuccess -> 
+	CP_SendAdminControlRequest();
+					
+HS_DeleteLightRequest() = 
+	wifi?HubIP.hash.x.DeleteLightRequest -> 
+	wifi!CPIP.AdminSuccess -> 
+	HS_ReceiveAdminControlRequest();
+					
+CP_DeleteUserIDRequest() = 
+	wifi!HubIP.hash.nonce.DeleteUserIDRequest -> 
+	wifi?CPIP.AdminSuccess -> 
+	CP_SendAdminControlRequest();
+
+HS_DeleteUserIDRequest() = 
+	wifi?HubIP.hash.x.DeleteUserIDRequest -> 
+	wifi!CPIP.AdminSuccess -> 
+	HS_ReceiveAdminControlRequest();
+
+CP_LinkButtonTrue() = 
+	wifi!HubIP.hash.nonce.LinkButtonTrue -> 
+	wifi?CPIP.AdminSuccess -> 
+	CP_SendAdminControlRequest();
+
+HS_LinkButtonTrue() = 
+	wifi?HubIP.hash.x.LinkButtonTrue -> 
+	executeCommand.LinkBTrue -> 
+	wifi!CPIP.AdminSuccess -> 
+	HS_ReceiveAdminControlRequest();
+
+
+// TR 35-38
+CP_Controlcmd() = 
+	wifi!HubIP.hash.nonce.Controlcmd -> 
+	wifi?CPIP.AdminSuccess -> 
+	wifi?CPIP.ControlCmdSuccess ->
+	CP_SendControlRequest();
+
+HS_Controlcmd() = 
+	wifi?HubIP.hash.nonce.Controlcmd -> 
+	wifi!CPIP.AdminSuccess -> 
+	zigbee!DeviceID.PanID.EncryptedControlcmd -> 
+	zigbee?HubIP.ACK -> 
+	wifi!CPIP.ControlCmdSuccess ->
+	HS_ReceiveControlRequest();
+
+SD_Controlcmd() = 
+	zigbee?DeviceID.PanID.EncryptedControlcmd -> 
+	executeCommand.EncryptedControlcmd -> 
+	zigbee!HubIP.ACK -> 
+	SD_Controlcmd();
+
+SystemStage3() = CP_SendAdminControlRequest() ||| HS_ReceiveAdminControlRequest() ||| SD_Controlcmd();
+
+//zigbeeSystem = SD_Proc() ||| Hub_Proc();
+//wifiSystem = Hub_Proc()||| CP_Proc();
+//
+//#assert zigbeeSystem deadlockfree; 
+//#assert wifiSystem deadlockfree; 				
+
+system = SD_Proc() ||| HS_Proc() |||  ZFE_Proc()||| CP_Proc();
+
+#assert system deadlockfree;
