@@ -1,0 +1,168 @@
+﻿channel attackerBuffer 3; 
+channel network[3] 0; // 0 as openwifi, 1 as wifi
+
+
+
+var c = [0, 1 ,2]; // 0 as openwifi, 1 as wifi, 2 as attackerwifi
+var ch = c[0];
+var SD_connected = openwifi;
+var executedBy = Nobody;
+
+var attacker_get_SDInfo = false;
+var attacker_get_wifiInfo = false;
+
+enum{ 
+ GetService, StateService, SetAccessPoint, 
+ StateAccessPoint, Configured, 
+ SetPowerRequest, SetColorRequest, GetLights, 
+ LightsState,
+ Success, Station, 
+ Username, Password, PasswordEncoded, 
+ AttackerWifiUsername, AttackerWifiPassword, AttackerWifiPasswordEncoded,
+ CP, SD, Attacker, Nobody,
+ wifi, openwifi, attackerwifi
+}; 
+
+
+// Attacker Behaviour
+
+AttackerProc() = AttackerAsCPDiscovery()[]AttackerAsSDDiscovery();
+
+AttackerAsCPDiscovery() = ifa(SD_connected == openwifi ) {
+	AttackerAsCPConfiguration()
+} else{
+	AttackerAsCPConfigured()
+};
+
+// Attacker acts as CP to get it's IP address and configuration (StateService) through openwifi channel 
+// ch = c[0]
+AttackerAsCPConfiguration() = network[ch]!Attacker.GetService -> network[ch]?StateService -> 
+							  getSDInfo{attacker_get_SDInfo = true} -> AttackerDirectConnect();
+
+// Attacker acts as CP to send command through wifi or attackerwifi	
+// ch = c[1] or c[2]						  
+AttackerAsCPConfigured() = network[ch]!Attacker.GetService -> network[ch]?StateService.Configured -> 
+						   AttackerSendCommand();		
+						   
+AttackerDirectConnect() = AttackerConfigWifi() [] AttackerSendCommand() [] AttackerConfigAttackerWifi();
+ 
+// Attacker connect to wifi ()
+AttackerConfigWifi() = ifa(ch == c[0]) {
+		network[ch]!Station.Username.Password -> 
+    	network[ch]?Station.Username.PasswordEncoded -> AttackerAsCPDiscovery()
+} else { AttackerAsCPDiscovery() };
+ 
+// Attacker connect to attacker
+AttackerConfigAttackerWifi() = ifa(ch == c[0]) {
+		network[ch]!Station.AttackerWifiUsername.AttackerWifiPassword -> 
+    	network[ch]?Station.AttackerWifiUsername.AttackerWifiPasswordEncoded -> AttackerAsCPDiscovery()
+} else { AttackerAsCPDiscovery() };
+
+AttackerSendCommand() = AttackerSetPowerRequest() [] AttackerSetColorRequest() [] AttackerGetLights();
+
+AttackerSetPowerRequest() = network[ch]!Attacker.SetPowerRequest -> network[ch]?Success-> AttackerSendCommand();
+AttackerSetColorRequest() = network[ch]!Attacker.SetColorRequest -> network[ch]?Success-> AttackerSendCommand();
+AttackerGetLights() = network[ch]!Attacker.GetLights -> network[ch]?LightsState -> AttackerSendCommand();
+
+
+AttackerAsSDDiscovery() = ifb(ch == c[0]){AttackerAsSDConfiguration()};
+
+AttackerAsSDConfiguration() = network[ch]?x.GetService -> network[ch]!StateService -> 
+							  network[ch]?Station.x.y -> AttackerAsSDConnectToWifi(x, y);
+							  
+AttackerAsSDConnectToWifi(x, y) = 
+  if (x == Username && y == Password) {
+    network[ch]!Station.Username.PasswordEncoded -> getWifiInfo{attacker_get_wifiInfo=true} -> AttackerAsSDDiscovery()
+  } else { AttackerAsSDDiscovery()};
+							  
+
+
+// Benign CP Process: Discovery Stage - Configuration Stage - Command Stage
+
+CPProc() = CPDiscovery();
+// Discovery Stage
+CPDiscovery() = 
+	if(ch == c[0]){
+		CPConfiguration()
+	}
+	else{
+		CPConfigured()
+	};
+
+CPConfiguration() = network[ch]!CP.GetService -> network[ch]?StateService -> CPDirectConnect();
+  
+CPDirectConnect() = CPConfigWifi() [] CPSendCommand();
+
+CPConfigured() = network[ch]!CP.GetService -> network[ch]?StateService.Configured -> CPSendCommand();
+
+// Stage 2: Setup connections with smart devices 
+
+// Configuration on Username and Password when communicating through openwifi
+CPConfigWifi() =
+  ifa(ch == c[0]) {  network[ch]!Station.Username.Password -> 
+    				 network[ch]?Station.Username.PasswordEncoded -> CPDiscovery()
+  } else { CPDiscovery()};
+
+// Stage 3: Send command to smart devices 
+
+CPSendCommand() = CPSetPowerRequest() [] CPSetColorRequest() [] CPGetLights();
+
+CPSetPowerRequest() = network[ch]!CP.SetPowerRequest -> network[ch]?Success-> CPSendCommand();
+CPSetColorRequest() = network[ch]!CP.SetColorRequest -> network[ch]?Success-> CPSendCommand();
+CPGetLights() = network[ch]!CP.GetLights -> network[ch]?LightsState -> CPSendCommand();
+
+ 
+SDProc() = SDDiscovery();
+
+SDDiscovery() = ifa(ch == c[0]){SDConfiguration()} else{SDConfigured()};
+
+// Case 1: communicate through openwifi
+SDConfiguration() = network[ch]?x.GetService -> network[ch]!StateService -> SDDirectConnect();
+SDDirectConnect() = SDConfigWifi() [] SDReceiveCommand();
+
+// Case 2: communicate through wifi
+SDConfigured() = network[ch]?x.GetService -> network[ch]!StateService.Configured -> SDReceiveCommand();
+
+SystemStage1 = CPDiscovery()|||SDDiscovery();  
+
+
+SDConfigWifi() = ifa (ch == c[0] ) {  network[ch]?Station.x.y -> SDConnectToWifi(x, y) } 
+				 else { SDDiscovery() };
+				 
+// Check whether username and password are correct.
+// if yes, go back to discovery stage and communicate through wifi 
+// if no, go back to discovery stage and communicate through openwifi 
+
+SDConnectToWifi(x, y) = if (x == Username && y == Password) {   
+	SDConnectedToWifi{SD_connected = wifi;} ->
+    network[ch]!Station.Username.PasswordEncoded -> changeChannel{ch = c[1]} -> SDDiscovery()
+  } else if(x == AttackerWifiUsername && y == AttackerWifiPassword){
+  	// Can delete function SDConnectedToWifi later
+  	SDConnectedToWifi{SD_connected = attackerwifi;} ->
+    network[ch]!Station.Username.PasswordEncoded -> changeChannel{ch = c[2]} -> SDDiscovery()
+  }else { SDDiscovery() };
+
+SystemStage2 = CPConfigWifi() ||| SDConfigWifi(); 
+
+SDReceiveCommand() = SDSetPowerRequest() [] SDSetColorRequest() [] SDGetLights();
+
+SDSetPowerRequest() = network[ch]?x.SetPowerRequest -> network[ch]!Success->
+					  executeCommand{executedBy = x} -> SDReceiveCommand();
+SDSetColorRequest() = network[ch]?x.SetColorRequest -> network[ch]!Success->
+					  executeCommand{executedBy = x} -> SDReceiveCommand();
+					  
+// executeCommand{executedBy = x} may be not suitable for this function
+SDGetLights() = network[ch]?x.GetLights -> network[ch]!LightsState ->
+					  executeCommand{executedBy = x}-> SDReceiveCommand();
+
+SystemStage3 = SDReceiveCommand() ||| CPSendCommand();
+	
+	
+	
+
+system = CPProc() ||| SDProc()|||AttackerProc();  
+
+
+#define violation ch == c[2] || executedBy == Attacker || attacker_get_SDInfo == true || attacker_get_wifiInfo == true;
+#assert system deadlockfree; 
+#assert system reaches violation;

@@ -23,15 +23,15 @@ enum {
 	Configs, Lights, Whitelist, DeleteLightRequest,
 	AdminSuccess, DeleteUserIDRequest, LinkButtonTrue, 
 	Controlcmd, EncryptedControlcmd, ACK, ControlCmdSuccess, 
-	CP, HS, ZFE, SD, Nobody,x
+	CP, HS, ZFE, SD, Nobody, x
 };
 
-enum {
-	TR1, TR2, TR3, TR4, TR5, TR6, TR7, TR8, TR9, TR10,
-	TR11, TR12, TR13, TR14, TR15, TR16, TR17, TR18, TR19, TR20,
-	TR21, TR22, TR23, TR24, TR25, TR26, TR27, TR28, TR29, TR30,
-	TR31, TR32, TR33, TR34, TR35, TR36, TR37, TR38
-};
+//enum {
+//	TR1, TR2, TR3, TR4, TR5, TR6, TR7, TR8, TR9, TR10,
+//	TR11, TR12, TR13, TR14, TR15, TR16, TR17, TR18, TR19, TR20,
+//	TR21, TR22, TR23, TR24, TR25, TR26, TR27, TR28, TR29, TR30,
+//	TR31, TR32, TR33, TR34, TR35, TR36, TR37, TR38
+//};
 
 
 var CP_Connects = Nobody;
@@ -43,13 +43,13 @@ Hub_Proc() = ZFE_Discovery();
 
 CP_Proc() = CP_Discovery();
 
-SD_Discovery() = zigbee!BeaconRequest -> zigbee?PanID.HubID.AssoPermit -> zigbee!PanID.DeviceID 
+SD_Discovery() = zigbee!SD.BeaconRequest -> zigbee?PanID.HubID.AssoPermit -> zigbee!SD.PanID.DeviceID 
 				 -> zigbee?BeaconRequest -> zigbee!PanID.DeviceID.AssoPermit 
 				 -> SD_Auth();
 				 
-ZFE_Discovery() = zigbee?BeaconRequest -> zigbee!PanID.HubID.AssoPermit -> zigbee?PanID.DeviceID 
+ZFE_Discovery() = zigbee?y.BeaconRequest -> zigbee!PanID.HubID.AssoPermit -> zigbee?y.PanID.DeviceID 
 				 -> zigbee!BeaconRequest -> zigbee?PanID.DeviceID.AssoPermit 
-				 -> connection{SD_ZFE_Connected = true}
+				 -> connection{SD_ZFE_Connected = true;}
 				 -> ZFE_Auth();
 
 
