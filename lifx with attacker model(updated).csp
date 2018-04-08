@@ -168,6 +168,13 @@ SystemStage3 = SDReceiveCommand() ||| CPSendCommand();
 system = CPProc() ||| SDProc() ||| AttackerProc();  
 
 
-#define violation ch == c[2] || executedBy == Attacker || attacker_get_SDInfo == true || attacker_get_wifiInfo == true;
+#define violation_wifi_disable ch == c[2];
+#define violation_controlled_by_attacker executedBy == Attacker;
+#define violation_getSDInfo attacker_get_SDInfo == true;
+#define violation_get_wifiInfo attacker_get_wifiInfo == true;
+
 #assert system deadlockfree; 
-#assert system reaches violation;
+#assert system reaches violation_wifi_disable;
+#assert system reaches violation_controlled_by_attacker;
+#assert system reaches violation_getSDInfo;
+#assert system reaches violation_get_wifiInfo;
