@@ -378,6 +378,78 @@ SD_Controlcmd() =
 
 //SystemStage3() = CP_SendAdminControlRequest() ||| HS_ReceiveAdminControlRequest() ||| SD_Controlcmd();
 
+
+var attackerAuth=false;
+
+
+Attacker_Proc() = AttackerAsCP();
+
+
+// Attacker behaviour
+AttackerAsCP() =
+	wifi!UPnPMsearchRequest.AttackerIP -> 
+	wifi?AttackerIP.ServerName.hub_ip.hub_id ->
+	wifi!hub_ip.Attacker_nonce ->  
+	wifi?AttackerIP.Attacker_hashed_nonce ->
+	attacker_authorized{attackerAuth = true} ->
+	AttackerCmdControl(hub_ip, Attacker_nonce);
+	
+//AttackerAsServer() = network?Client.Hello -> attackerBuffer!Client.Hello -> AttackerProc();
+
+
+AttackerCmdControl(hub_ip, hash_x) = 
+	wifi!hub_ip.hash_x.Controlcmd -> 
+	wifi?AttackerIP.ControlCmdSuccess ->
+	Attacker_Proc();
+
+AttackerAdminControl(hub_ip, hash_x) = 
+	wifi!hub_ip.hash_x.DeleteUserIDRequest -> 
+	wifi?AttackerIP.AdminSuccess -> 
+	Attacker_Proc();
+	
+system = SD_Proc() ||| HS_Proc() |||  ZFE_Proc()||| CP_Proc() ||| Attacker_Proc();
+
+#define violation_attackerAsCP attackerAuth == true;
+#assert system reaches violation_attackerAsCP;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 //
 //
 //AttackerProc() = AttackerNegotiate() [] AttackerAsServer() [] AttackerRelay() [] AttackerReNegotiate();
@@ -446,6 +518,6 @@ SD_Controlcmd() =
 //#assert zigbeeSystem deadlockfree; 
 //#assert wifiSystem deadlockfree; 				
 
-system = SD_Proc() ||| HS_Proc() |||  ZFE_Proc()||| CP_Proc();
+//system = SD_Proc() ||| HS_Proc() |||  ZFE_Proc()||| CP_Proc();
 
-#assert system deadlockfree;
+//#assert system deadlockfree;
