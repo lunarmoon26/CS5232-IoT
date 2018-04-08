@@ -14,13 +14,9 @@ enum {
 	AdminSuccess, DeleteUserIDRequest, LinkButtonTrue, 
 	Controlcmd, EncryptedControlcmd, ACK, ControlCmdSuccess, 
 	CP, HS, ZFE, SD, Nobody, CP_nonce, CP_hashed_nonce, 
-	Attacker_nonce, Attacker_hashed_nonce
+	Attacker_nonce, Attacker_hashed_nonce, AttackerHubID,
+	AttackerDeviceID
 };
-
-var CP_Connects = Nobody;
-var ZFE_Connects = Nobody;
-var SD_Connects = Nobody;
-var HS_Connects = Nobody;
 
 var HS_Whitelist = Nobody;
 var LinkBridge = false;
@@ -29,6 +25,10 @@ var Network_HubID = Nobody;
 var New_DeviceID = Nobody;
 var Bridge_HubIP = Nobody;
 var SD_Joined_Network = false;
+
+var attackerAuth = false;
+var attackerAdminControl = false;
+var controlModified = false;
 
 SD_Proc() = SD_Discovery();
 HS_Proc() = HS_Discovery();
@@ -379,10 +379,10 @@ SD_Controlcmd() =
 //SystemStage3() = CP_SendAdminControlRequest() ||| HS_ReceiveAdminControlRequest() ||| SD_Controlcmd();
 
 
-var attackerAuth=false;
-
-
-Attacker_Proc() = AttackerAsCP();
+Attacker_Proc() = 
+	AttackerAsCP() [] 
+	AttackerAsHub() []
+	AttackerRelay();
 
 
 // Attacker behaviour
@@ -392,10 +392,27 @@ AttackerAsCP() =
 	wifi!hub_ip.Attacker_nonce ->  
 	wifi?AttackerIP.Attacker_hashed_nonce ->
 	attacker_authorized{attackerAuth = true} ->
-	AttackerCmdControl(hub_ip, Attacker_nonce);
+	AttackerAdminControl(hub_ip, Attacker_hashed_nonce);
 	
-//AttackerAsServer() = network?Client.Hello -> attackerBuffer!Client.Hello -> AttackerProc();
+AttackerAsHub() = 
+	wifi?UPnPMsearchRequest.CPIP -> 
+	wifi!CPIP.ServerName.AttackerIP.AttackerHubID -> 
+	Attacker_Proc();
+	
+//AttackerAsSD() = 
+//	zigbee!BeaconRequest -> 
+//	zigbee?PanID.hub_id.AssoPermit -> 
+//	NetworkHubDiscovered{Network_HubID = hub_id} ->
+//	zigbee!PanID.AttackerDeviceID ->
+//	SD_JoinNetwork();
 
+
+AttackerRelay() = 
+	attackerbuffer?x.y.Controlcmd -> wifi!x.y.Controlcmd{controlModified = true} -> Attacker_Proc()
+	[] wifi?x.y.z -> attackerbuffer!x.y.z -> Attacker_Proc();
+//               [] network?y.z -> attackerBuffer!y.z -> AttackerProc() 
+//               [] network?attacker_server_key.y -> network!y -> AttackerProc() 
+//               [] network?y.z -> network!attacker_server_key.y.z -> AttackerProc();
 
 AttackerCmdControl(hub_ip, hash_x) = 
 	wifi!hub_ip.hash_x.Controlcmd -> 
@@ -405,13 +422,19 @@ AttackerCmdControl(hub_ip, hash_x) =
 AttackerAdminControl(hub_ip, hash_x) = 
 	wifi!hub_ip.hash_x.DeleteUserIDRequest -> 
 	wifi?AttackerIP.AdminSuccess -> 
+	attacker_admin_authorized{attackerAdminControl = true} ->
 	Attacker_Proc();
 	
 system = SD_Proc() ||| HS_Proc() |||  ZFE_Proc()||| CP_Proc() ||| Attacker_Proc();
 
-#define violation_attackerAsCP attackerAuth == true;
-#assert system reaches violation_attackerAsCP;
+#define violation_unauthControl attackerAuth == true;
+#define violation_unauthAdmin attackerAdminControl == true;
+#define violation_modifyControl controlModified == true;
 
+
+#assert system reaches violation_unauthControl;
+#assert system reaches violation_unauthAdmin;
+#assert system reaches violation_modifyControl;
 
 
 
