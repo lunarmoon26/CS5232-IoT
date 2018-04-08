@@ -23,9 +23,11 @@ var SD_Connects = Nobody;
 var HS_Connects = Nobody;
 
 var HS_Whitelist = Nobody;
-
 var LinkBridge = false;
 
+var Network_HubID = Nobody;
+var New_DeviceID = Nobody;
+var SD_Joined_Network = false;
 
 SD_Proc() = SD_Discovery();
 HS_Proc() = HS_Discovery();
@@ -44,34 +46,38 @@ ZFE_Discovery() =
 
 SD_NetworkDiscovery() = 
 	zigbee!BeaconRequest -> 
-	zigbee?PanID.HubID.AssoPermit -> 
+	zigbee?PanID.hub_id.AssoPermit -> 
+	NetworkHubDiscovered{Network_HubID = hub_id} ->
 	zigbee!PanID.DeviceID ->
 	SD_JoinNetwork();
  
 ZFE_NetworkDiscovery() = 
 	zigbee?BeaconRequest -> 
 	zigbee!PanID.HubID.AssoPermit -> 
-	zigbee?PanID.DeviceID ->
+	zigbee?PanID.device_id ->
+	NewDeviceDiscovered{New_DeviceID = device_id} -> 
 	ZFE_JoinNetwork();
 
 SD_DeviceDiscovery() = 
-	zigbee!BeaconRequest -> 
-	zigbee?PanID.DeviceID.AssoPermit ->
+	zigbee?BeaconRequest.hub_id -> 
+	NetworkHubDiscovered{Network_HubID = hub_id} ->
+	zigbee!PanID.DeviceID.AssoPermit ->
 	SD_JoinDevice();
 
 ZFE_DeviceDiscovery() = 
-	zigbee?BeaconRequest -> 
-	zigbee!PanID.DeviceID.AssoPermit ->
+	zigbee!BeaconRequest.HubID -> 
+	zigbee?PanID.device_id.AssoPermit ->
+	NewDeviceDiscovered{New_DeviceID = device_id} ->
 	ZFE_JoinDevice();
 
 CP_Discovery() = 
 	wifi!UPnPMsearchRequest.CPIP -> 
-	wifi?CPIP.ServerName.x.y -> // x - HubIP, y - HubID
-	CP_Auth(x);
+	wifi?CPIP.ServerName.hub_ip.hub_id ->
+	CP_Auth(hub_ip);
 				
 HS_Discovery() = 
-	wifi?UPnPMsearchRequest.x -> // x - sender_ip
-	wifi!x.ServerName.HubIP.HubID -> 
+	wifi?UPnPMsearchRequest.cp_ip ->
+	wifi!cp_ip.ServerName.HubIP.HubID -> 
 	HS_Auth();
 				
 
@@ -121,18 +127,19 @@ HS_ReceiveSearchLightRequest() =
 ZFE_JoinNetwork() = 
 	zigbee!ScanRequest.PanID -> 
 	zigbee?HubID.PanID.ScanResponse -> 
-	zigbee!DeviceID.IdentifyRequest -> 
-	zigbee!DeviceID.PanID.NetworkJoinRequest -> 
+	zigbee!New_DeviceID.IdentifyRequest -> 
+	zigbee!New_DeviceID.PanID.NetworkJoinRequest -> 
 	zigbee?HubID.PanID.NetworkJoinResponse -> 
 	HS_ReceiveRequest();
 
 SD_JoinNetwork() = 
 	zigbee?ScanRequest.PanID -> 
-	zigbee!HubID.PanID.ScanResponse -> 
+	zigbee!Network_HubID.PanID.ScanResponse -> 
 	zigbee?DeviceID.IdentifyRequest -> 
 	executeCommand.IdentifyRequest -> 
 	zigbee?DeviceID.PanID.NetworkJoinRequest -> 
-	zigbee!HubID.PanID.NetworkJoinResponse -> 
+	zigbee!Network_HubID.PanID.NetworkJoinResponse -> 
+	JoinToNetwork{SD_Joined_Network = true} ->
 	SD_ReceiveRequest();
 
 
@@ -150,18 +157,19 @@ HS_ReceiveJoinNearestDeviceRequest() =
 ZFE_JoinDevice() = 
 	zigbee!LinkScanRequest.PanID -> 
 	zigbee?HubID.PanID.LinkScanResponse -> 
-	zigbee!DeviceID.LinkIdentifyRequest -> 
-	zigbee!DeviceID.PanID.LinkNetworkJoinRequest -> 
+	zigbee!New_DeviceID.LinkIdentifyRequest -> 
+	zigbee!New_DeviceID.PanID.LinkNetworkJoinRequest -> 
 	zigbee?HubID.PanID.LinkNetworkJoinResponse -> 
 	HS_ReceiveRequest();
 	
 SD_JoinDevice() = 
 	zigbee?LinkScanRequest.PanID -> 
-	zigbee!HubID.PanID.LinkScanResponse -> 
+	zigbee!Network_HubID.PanID.LinkScanResponse -> 
 	zigbee?DeviceID.IdentifyRequest -> 
 	executeCommand.LinkIdentifyRequest -> 
 	zigbee?DeviceID.PanID.LinkNetworkJoinRequest -> 
-	zigbee!HubID.PanID.LinkNetworkJoinResponse -> 
+	zigbee!Network_HubID.PanID.LinkNetworkJoinResponse -> 
+	JoinToNetwork{SD_Joined_Network = true} ->
 	SD_ReceiveRequest();
 	
 HS_SearchLightResponse() = 
@@ -363,8 +371,8 @@ HS_ControlSuccessResponse() =
 SD_Controlcmd() = 
 	zigbee?DeviceID.PanID.EncryptedControlcmd -> 
 	executeCommand.EncryptedControlcmd -> 
-	zigbee!HubID.ACK -> 
-	SD_Controlcmd();
+	zigbee!Network_HubID.ACK -> 
+	SD_ReceiveRequest();
 
 //SystemStage3() = CP_SendAdminControlRequest() ||| HS_ReceiveAdminControlRequest() ||| SD_Controlcmd();
 
