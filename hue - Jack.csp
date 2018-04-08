@@ -27,6 +27,7 @@ var LinkBridge = false;
 
 var Network_HubID = Nobody;
 var New_DeviceID = Nobody;
+var Bridge_HubIP = Nobody;
 var SD_Joined_Network = false;
 
 SD_Proc() = SD_Discovery();
@@ -73,7 +74,8 @@ ZFE_DeviceDiscovery() =
 CP_Discovery() = 
 	wifi!UPnPMsearchRequest.CPIP -> 
 	wifi?CPIP.ServerName.hub_ip.hub_id ->
-	CP_Auth(hub_ip);
+	ServerDiscovered{Bridge_HubIP = hub_ip} ->
+	CP_Auth();
 				
 HS_Discovery() = 
 	wifi?UPnPMsearchRequest.cp_ip ->
@@ -88,11 +90,11 @@ HS_Discovery() =
 //====================S2: Authentication Stage====================
 
 // TR 9-10
-CP_Auth(hub_ip) = 
+CP_Auth() = 
 	newnonce.CP_nonce -> 
-	wifi!hub_ip.CP_nonce ->  
-	wifi?CPIP.x -> // x - hash(x)
-	CP_SendRequest(hub_ip, x);
+	wifi!Bridge_HubIP.CP_nonce ->  
+	wifi?CPIP.hash_x ->
+	CP_SendRequest(hash_x);
 
 HS_Auth() = 
 	wifi?HubIP.x ->  
@@ -115,10 +117,10 @@ HS_AuthFromNonce(x) =
 	};
 
 // TR 11-17
-CP_SendSearchLightRequest(hub_ip, hash_x) = 
-	wifi!hub_ip.hash_x.SearchLightRequest -> 
+CP_SendSearchLightRequest(hash_x) = 
+	wifi!Bridge_HubIP.hash_x.SearchLightRequest -> 
 	wifi?CPIP.RequestSuccess -> 
-	CP_SendRequest(hub_ip, hash_x);
+	CP_SendRequest(hash_x);
 	
 HS_ReceiveSearchLightRequest() = 
 	wifi?HubIP.x.SearchLightRequest -> 
@@ -145,10 +147,10 @@ SD_JoinNetwork() =
 
 
 // TR 18-24
-CP_SendJoinNearestDeviceRequest(hub_ip, hash_x) = 
-	wifi!hub_ip.hash_x.JoinNearestDeviceRequest -> 
+CP_SendJoinNearestDeviceRequest(hash_x) = 
+	wifi!Bridge_HubIP.hash_x.JoinNearestDeviceRequest -> 
 	wifi?CPIP.RequestSuccess->
-	CP_SendRequest(hub_ip, hash_x);
+	CP_SendRequest(hash_x);
 
 HS_ReceiveJoinNearestDeviceRequest() = 
 	wifi?HubIP.x.JoinNearestDeviceRequest -> 
@@ -198,11 +200,11 @@ HS_JoinNearestDeviceResponse() =
 		HS_ReceiveRequest()
 	};
 
-CP_SendRequest(hub_ip, hash_x) = 
-	CP_SendSearchLightRequest(hub_ip, hash_x) []
-	CP_SendJoinNearestDeviceRequest(hub_ip, hash_x) []
-	CP_RequestLightResult(hub_ip, hash_x) []
-	CP_GetInfoRequest(hub_ip, hash_x);
+CP_SendRequest(hash_x) = 
+	CP_SendSearchLightRequest(hash_x) []
+	CP_SendJoinNearestDeviceRequest(hash_x) []
+	CP_RequestLightResult(hash_x) []
+	CP_GetInfoRequest(hash_x);
 	
 HS_ReceiveRequest() = 
 	HS_ReceiveSearchLightRequest() []
@@ -222,12 +224,12 @@ SD_ReceiveRequest() =
 //====================S3: Control Stage====================
 
 
-CP_SendAdminControlRequest(hub_ip, hash_x) = 
-	CP_GetInfoRequest(hub_ip, hash_x) [] 
-	CP_DeleteLightRequest(hub_ip, hash_x) [] 
-	CP_DeleteUserIDRequest(hub_ip, hash_x) [] 
-	CP_LinkButtonTrue(hub_ip, hash_x) []
-	CP_SendRequest(hub_ip, hash_x);
+CP_SendAdminControlRequest(hash_x) = 
+	CP_GetInfoRequest(hash_x) [] 
+	CP_DeleteLightRequest(hash_x) [] 
+	CP_DeleteUserIDRequest(hash_x) [] 
+	CP_LinkButtonTrue(hash_x) []
+	CP_SendRequest(hash_x);
 	
 HS_ReceiveAdminControlRequest() = 
 	HS_GetInfoRequest() [] 
@@ -236,10 +238,10 @@ HS_ReceiveAdminControlRequest() =
 	HS_LinkButtonTrue() []
 	HS_ReceiveRequest();
 	
-CP_SendControlRequest(hub_ip, hash_x) = 
-	CP_RequestLightResult(hub_ip, hash_x) [] 
-	CP_Controlcmd(hub_ip, hash_x) []
-	CP_SendRequest(hub_ip, hash_x);
+CP_SendControlRequest(hash_x) = 
+	CP_RequestLightResult(hash_x) [] 
+	CP_Controlcmd(hash_x) []
+	CP_SendRequest(hash_x);
 	
 HS_ReceiveControlRequest() = 
 	HS_RequestLightResult() [] 
@@ -248,10 +250,10 @@ HS_ReceiveControlRequest() =
 	
 
 // TR 25-26
-CP_RequestLightResult(hub_ip, hash_x) = 
-	wifi!hub_ip.hash_x.RequestLightResult -> 
+CP_RequestLightResult(hash_x) = 
+	wifi!Bridge_HubIP.hash_x.RequestLightResult -> 
 	wifi?CPIP.LightNo.LightName -> 
-	CP_SendControlRequest(hub_ip, hash_x);
+	CP_SendControlRequest(hash_x);
 	
 HS_RequestLightResult() = 
 	wifi?HubIP.x.RequestLightResult -> 
@@ -259,38 +261,38 @@ HS_RequestLightResult() =
 
 
 // TR 27-34
-CP_GetInfoRequest(hub_ip, hash_x) = 
-	wifi!hub_ip.hash_x.GetInfoRequest -> 
+CP_GetInfoRequest(hash_x) = 
+	wifi!Bridge_HubIP.hash_x.GetInfoRequest -> 
 	wifi?CPIP.Configs.Lights.Whitelist -> 
-	CP_SendAdminControlRequest(hub_ip, hash_x);
+	CP_SendAdminControlRequest(hash_x);
 	
 HS_GetInfoRequest() = 
 	wifi?HubIP.x.GetInfoRequest -> 
 	HS_GetInfoResponse();
 
 
-CP_DeleteLightRequest(hub_ip, hash_x) = 
-	wifi!hub_ip.hash_x.DeleteLightRequest -> 
+CP_DeleteLightRequest(hash_x) = 
+	wifi!Bridge_HubIP.hash_x.DeleteLightRequest -> 
 	wifi?CPIP.AdminSuccess -> 
-	CP_SendAdminControlRequest(hub_ip, hash_x);
+	CP_SendAdminControlRequest(hash_x);
 					
 HS_DeleteLightRequest() = 
 	wifi?HubIP.x.DeleteLightRequest -> 
 	HS_AdminSuccessResponse();
 					
-CP_DeleteUserIDRequest(hub_ip, hash_x) = 
-	wifi!hub_ip.hash_x.DeleteUserIDRequest -> 
+CP_DeleteUserIDRequest(hash_x) = 
+	wifi!Bridge_HubIP.hash_x.DeleteUserIDRequest -> 
 	wifi?CPIP.AdminSuccess -> 
-	CP_SendAdminControlRequest(hub_ip, hash_x);
+	CP_SendAdminControlRequest(hash_x);
 
 HS_DeleteUserIDRequest() = 
 	wifi?HubIP.x.DeleteUserIDRequest -> 
 	HS_AdminSuccessResponse();
 
-CP_LinkButtonTrue(hub_ip, hash_x) = 
-	wifi!hub_ip.hash_x.LinkButtonTrue -> 
+CP_LinkButtonTrue(hash_x) = 
+	wifi!Bridge_HubIP.hash_x.LinkButtonTrue -> 
 	wifi?CPIP.AdminSuccess -> 
-	CP_SendAdminControlRequest(hub_ip, hash_x);
+	CP_SendAdminControlRequest(hash_x);
 
 HS_LinkButtonTrue() = 
 	wifi?HubIP.x.LinkButtonTrue -> 
@@ -299,10 +301,10 @@ HS_LinkButtonTrue() =
 
 
 // TR 35-38
-CP_Controlcmd(hub_ip, hash_x) = 
-	wifi!hub_ip.hash_x.Controlcmd -> 
+CP_Controlcmd(hash_x) = 
+	wifi!Bridge_HubIP.hash_x.Controlcmd -> 
 	wifi?CPIP.ControlCmdSuccess ->
-	CP_SendRequest(hub_ip, hash_x);
+	CP_SendRequest(hash_x);
 
 HS_Controlcmd() = 
 	wifi?HubIP.x.Controlcmd -> 
@@ -352,13 +354,13 @@ HS_AdminSuccessResponse() =
 	
 HS_ControlSuccessResponse() = 
 	if(HS_Whitelist == CP_hashed_nonce){
-		zigbee!DeviceID.PanID.EncryptedControlcmd -> 
+		zigbee!New_DeviceID.PanID.EncryptedControlcmd -> 
 		zigbee?HubID.ACK -> 
 		wifi!CPIP.ControlCmdSuccess ->
 		HS_ReceiveRequest()
 	}
 	else if(HS_Whitelist == Attacker_hashed_nonce){
-		zigbee!DeviceID.PanID.EncryptedControlcmd -> 
+		zigbee!New_DeviceID.PanID.EncryptedControlcmd -> 
 		zigbee?HubIP.ACK -> 
 		wifi!AttackerIP.ControlCmdSuccess ->
 		HS_ReceiveRequest()
