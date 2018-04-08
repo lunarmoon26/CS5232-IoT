@@ -13,13 +13,16 @@ enum {
 	Configs, Lights, Whitelist, DeleteLightRequest,
 	AdminSuccess, DeleteUserIDRequest, LinkButtonTrue, 
 	Controlcmd, EncryptedControlcmd, ACK, ControlCmdSuccess, 
-	CP, HS, ZFE, SD, Nobody, hash, nonce, LinkBTrue, LinkBFalse
+	CP, HS, ZFE, SD, Nobody, CP_nonce, CP_hashed_nonce, 
+	Attacker_nonce, Attacker_hashed_nonce
 };
 
 var CP_Connects = Nobody;
 var ZFE_Connects = Nobody;
 var SD_Connects = Nobody;
 var HS_Connects = Nobody;
+
+var LinkBridge = false;
 
 
 SD_Proc() = SD_Discovery();
@@ -78,26 +81,41 @@ SystemStage1() = SD_Discovery() ||| ZFE_Discovery() ||| CP_Discovery() ||| HS_Di
 
 // TR 9-10
 CP_Auth() = 
-	newnonce.nonce -> 
-	wifi!HubIP.nonce ->  
-	wifi?CPIP.hash.nonce ->
-	CP_SendRequest();
+	newnonce.CP_nonce -> 
+	wifi!HubIP.CP_nonce ->  
+	wifi?CPIP.x ->
+	clientconnected{CP_Connects = HS} ->
+	CP_SendRequest(x);
 	
 HS_Auth() = 
 	wifi?HubIP.x ->  
-	executeCommand.LinkBTrue -> 
-	wifi!CPIP.hash.x -> 
-	executeCommand.LinkBFalse -> 
-	HS_ReceiveRequest();
+	HS_AuthCP(x);
+
+HS_AuthCP(x) = 
+	if(x == CP_nonce){
+//	user can press the hardware button
+		executeCommand{LinkBridge = true} -> 
+		wifi!CPIP.CP_hashed_nonce -> 
+		serverconnected{HS_Connects = CP} ->
+		executeCommand{LinkBridge = false} -> 
+		HS_ReceiveRequest()
+	}
+	else{
+//	attacker keeping sending nonce
+		executeCommand{LinkBridge = true} -> 
+		wifi!CPIP.Attacker_hashed_nonce -> 
+		serverconnected{HS_Connects = Attacker} ->
+		executeCommand{LinkBridge = false} -> 
+	};
 
 // TR 11-17
-CP_SendSearchLightRequest() = 
-	wifi!HubIP.hash.nonce.SearchLightRequest -> 
+CP_SendSearchLightRequest(x) = 
+	wifi!HubIP.x.SearchLightRequest -> 
 	wifi?CPIP.RequestSuccess -> 
-	CP_SendRequest();
+	CP_SendRequest(x);
 	
 HS_ReceiveSearchLightRequest() = 
-	wifi?HubIP.hash.x.SearchLightRequest -> 
+	wifi?HubIP.x.SearchLightRequest -> 
 	wifi!CPIP.RequestSuccess -> 
 	ZFE_JoinNetwork();
 
@@ -121,13 +139,13 @@ SD_JoinNetwork() =
 
 
 // TR 18-24
-CP_SendJoinNearestDeviceRequest() = 
-	wifi!HubIP.hash.nonce.JoinNearestDeviceRequest -> 
+CP_SendJoinNearestDeviceRequest(x) = 
+	wifi!HubIP.x.JoinNearestDeviceRequest -> 
 	wifi?CPIP.RequestSuccess->
-	CP_SendRequest();
+	CP_SendRequest(x);
 
 HS_ReceiveJoinNearestDeviceRequest() = 
-	wifi?HubIP.hash.x.JoinNearestDeviceRequest -> 
+	wifi?HubIP.x.JoinNearestDeviceRequest -> 
 	wifi!CPIP.RequestSuccess -> 
 	ZFE_JoinDevice();
 	
@@ -149,11 +167,11 @@ SD_JoinDevice() =
 	SD_ReceiveRequest();
 
 
-CP_SendRequest() = 
-	CP_SendSearchLightRequest() []
-	CP_SendJoinNearestDeviceRequest() []
-	CP_SendControlRequest() []
-	CP_SendAdminControlRequest();
+CP_SendRequest(x) = 
+	CP_SendSearchLightRequest(x) []
+	CP_SendJoinNearestDeviceRequest(x) []
+	CP_SendControlRequest(x) []
+	CP_SendAdminControlRequest(x);
 	
 HS_ReceiveRequest() = 
 	HS_ReceiveSearchLightRequest() []
@@ -173,11 +191,11 @@ SystemStage2() = CP_Auth() ||| HS_Auth() ||| SD_ReceiveRequest();
 //====================S3: Control Stage====================
 
 
-CP_SendAdminControlRequest() = 
-	CP_GetInfoRequest() [] 
-	CP_DeleteLightRequest() [] 
-	CP_DeleteUserIDRequest() [] 
-	CP_LinkButtonTrue();
+CP_SendAdminControlRequest(hash_x) = 
+	CP_GetInfoRequest(hash_x) [] 
+	CP_DeleteLightRequest(hash_x) [] 
+	CP_DeleteUserIDRequest(hash_x) [] 
+	CP_LinkButtonTrue(hash_x);
 	
 HS_ReceiveAdminControlRequest() = 
 	HS_GetInfoRequest() [] 
@@ -185,9 +203,9 @@ HS_ReceiveAdminControlRequest() =
 	HS_DeleteUserIDRequest() [] 
 	HS_LinkButtonTrue();
 	
-CP_SendControlRequest() = 
-	CP_RequestLightResult() [] 
-	CP_Controlcmd();
+CP_SendControlRequest(hash_x) = 
+	CP_RequestLightResult(hash_x) [] 
+	CP_Controlcmd(hash_x);
 	
 HS_ReceiveControlRequest() = 
 	HS_RequestLightResult() [] 
@@ -195,75 +213,83 @@ HS_ReceiveControlRequest() =
 	
 
 // TR 25-26
-CP_RequestLightResult() = 
-	wifi!HubIP.hash.nonce.RequestLightResult -> 
+CP_RequestLightResult(x) = 
+	wifi!HubIP.x.RequestLightResult -> 
 	wifi?CPIP.LightNo.LightName -> 
-	CP_SendControlRequest();
+	CP_SendControlRequest(x);
 	
 HS_RequestLightResult() = 
-	wifi?HubIP.hash.x.RequestLightResult -> 
+	wifi?HubIP.x.RequestLightResult -> 
 	wifi!CPIP.LightNo.LightName -> 
 	HS_ReceiveControlRequest();
 
 
 // TR 27-34
-CP_GetInfoRequest() = 
-	wifi!HubIP.hash.nonce.GetInfoRequest -> 
+CP_GetInfoRequest(x) = 
+	wifi!HubIP.x.GetInfoRequest -> 
 	wifi?CPIP.Configs.Lights.Whitelist -> 
-	CP_SendAdminControlRequest();
+	CP_SendAdminControlRequest(x);
 	
 HS_GetInfoRequest() = 
-	wifi?HubIP.hash.nonce.GetInfoRequest -> 
+	wifi?HubIP.x.GetInfoRequest -> 
 	wifi!CPIP.Configs.Lights.Whitelist -> 
 	HS_ReceiveAdminControlRequest();
 
 
-CP_DeleteLightRequest() = 
-	wifi!HubIP.hash.nonce.DeleteLightRequest -> 
+CP_DeleteLightRequest(x) = 
+	wifi!HubIP.x.DeleteLightRequest -> 
 	wifi?CPIP.AdminSuccess -> 
-	CP_SendAdminControlRequest();
+	CP_SendAdminControlRequest(x);
 					
 HS_DeleteLightRequest() = 
-	wifi?HubIP.hash.x.DeleteLightRequest -> 
+	wifi?HubIP.x.DeleteLightRequest -> 
 	wifi!CPIP.AdminSuccess -> 
 	HS_ReceiveAdminControlRequest();
 					
-CP_DeleteUserIDRequest() = 
-	wifi!HubIP.hash.nonce.DeleteUserIDRequest -> 
+CP_DeleteUserIDRequest(x) = 
+	wifi!HubIP.x.DeleteUserIDRequest -> 
 	wifi?CPIP.AdminSuccess -> 
-	CP_SendAdminControlRequest();
+	CP_SendAdminControlRequest(x);
 
 HS_DeleteUserIDRequest() = 
-	wifi?HubIP.hash.x.DeleteUserIDRequest -> 
+	wifi?HubIP.x.DeleteUserIDRequest -> 
 	wifi!CPIP.AdminSuccess -> 
 	HS_ReceiveAdminControlRequest();
 
-CP_LinkButtonTrue() = 
-	wifi!HubIP.hash.nonce.LinkButtonTrue -> 
+CP_LinkButtonTrue(x) = 
+	wifi!HubIP.x.LinkButtonTrue -> 
 	wifi?CPIP.AdminSuccess -> 
-	CP_SendAdminControlRequest();
+	CP_SendAdminControlRequest(x);
 
 HS_LinkButtonTrue() = 
-	wifi?HubIP.hash.x.LinkButtonTrue -> 
-	executeCommand.LinkBTrue -> 
+	wifi?HubIP.x.LinkButtonTrue -> 
+	executeCommand{LinkBridge = true} -> 
 	wifi!CPIP.AdminSuccess -> 
 	HS_ReceiveAdminControlRequest();
 
 
 // TR 35-38
-CP_Controlcmd() = 
-	wifi!HubIP.hash.nonce.Controlcmd -> 
+CP_Controlcmd(x) = 
+	wifi!HubIP.x.Controlcmd -> 
 	wifi?CPIP.AdminSuccess -> 
 	wifi?CPIP.ControlCmdSuccess ->
-	CP_SendControlRequest();
+	CP_SendControlRequest(x);
 
 HS_Controlcmd() = 
-	wifi?HubIP.hash.nonce.Controlcmd -> 
-	wifi!CPIP.AdminSuccess -> 
-	zigbee!DeviceID.PanID.EncryptedControlcmd -> 
-	zigbee?HubIP.ACK -> 
-	wifi!CPIP.ControlCmdSuccess ->
-	HS_ReceiveControlRequest();
+	wifi?HubIP.x.Controlcmd -> 
+	HS_AckControlcmd(x);
+
+HS_AckControlcmd(x) = 
+	if(x == CP_hashed_nonce){
+		wifi!CPIP.AdminSuccess -> 
+		zigbee!DeviceID.PanID.EncryptedControlcmd -> 
+		zigbee?HubIP.ACK -> 
+		wifi!CPIP.ControlCmdSuccess ->
+		HS_ReceiveControlRequest()
+	}
+	else{
+		HS_ReceiveControlRequest()
+	};
 
 SD_Controlcmd() = 
 	zigbee?DeviceID.PanID.EncryptedControlcmd -> 
@@ -271,7 +297,7 @@ SD_Controlcmd() =
 	zigbee!HubIP.ACK -> 
 	SD_Controlcmd();
 
-SystemStage3() = CP_SendAdminControlRequest() ||| HS_ReceiveAdminControlRequest() ||| SD_Controlcmd();
+//SystemStage3() = CP_SendAdminControlRequest() ||| HS_ReceiveAdminControlRequest() ||| SD_Controlcmd();
 
 //zigbeeSystem = SD_Proc() ||| Hub_Proc();
 //wifiSystem = Hub_Proc()||| CP_Proc();
