@@ -1,0 +1,8 @@
+﻿// Malicious participants
+
+AttackerProc() = AttackerAsCP()[] AttackerRelay()
+
+// Attacker as CP
+
+AttackerAsCP() = attackerBuffer?UPnPMsearchRequest -> wifi!UPnPMsearchRequest -> AttackerProc()[]
+				
