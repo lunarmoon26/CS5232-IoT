@@ -28,6 +28,7 @@ var SD_Joined_Network = false;
 
 var attackerAuth = false;
 var attackerAdminControl = false;
+var hijackedSD = false;
 var controlModified = false;
 
 SD_Proc() = SD_Discovery();
@@ -394,9 +395,21 @@ AttackerAsCP() =
 	attacker_authorized{attackerAuth = true} ->
 	AttackerAdminControl(hub_ip, Attacker_hashed_nonce);
 	
+//AttackerAsHub() = 
+//	wifi?UPnPMsearchRequest.CPIP -> 
+//	wifi!CPIP.ServerName.AttackerIP.AttackerHubID -> 
+//	Attacker_Proc();
+
+// Using TouchLink Protocol
 AttackerAsHub() = 
-	wifi?UPnPMsearchRequest.CPIP -> 
-	wifi!CPIP.ServerName.AttackerIP.AttackerHubID -> 
+	zigbee!BeaconRequest.AttackerHubID -> 
+	zigbee?PanID.benign_device_id.AssoPermit ->
+	zigbee!LinkScanRequest.PanID -> 
+	zigbee?AttackerHubID.PanID.LinkScanResponse -> 
+//	zigbee!benign_device_id.LinkIdentifyRequest -> 
+//	zigbee!benign_device_id.PanID.LinkNetworkJoinRequest -> 
+//	zigbee?AttackerHubID.PanID.LinkNetworkJoinResponse -> 
+	hijack_connected_sd{hijackedSD = true} ->
 	Attacker_Proc();
 	
 //AttackerAsSD() = 
@@ -428,26 +441,15 @@ AttackerAdminControl(hub_ip, hash_x) =
 system = SD_Proc() ||| HS_Proc() |||  ZFE_Proc()||| CP_Proc() ||| Attacker_Proc();
 
 #define violation_unauthControl attackerAuth == true;
+#define violation_hijackDevice hijackedSD == true;
 #define violation_unauthAdmin attackerAdminControl == true;
 #define violation_modifyControl controlModified == true;
 
 
 #assert system reaches violation_unauthControl;
+#assert system reaches violation_hijackDevice;
 #assert system reaches violation_unauthAdmin;
 #assert system reaches violation_modifyControl;
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
