@@ -1,8 +1,82 @@
-﻿// Malicious participants
+﻿var attackerAuth=false;
 
-AttackerProc() = AttackerAsCP()[] AttackerRelay()
 
-// Attacker as CP
+Attacker_Proc() = AttackerAsCP_Discovery();
 
-AttackerAsCP() = attackerBuffer?UPnPMsearchRequest -> wifi!UPnPMsearchRequest -> AttackerProc()[]
-				
+// Attacker behaviour
+
+AttackerAsCP_Discovery() = 
+	wifi!UPnPMsearchRequest.AttackerIP -> 
+	wifi?AttackerIP.ServerName.x.y -> // x - HubIP, y - HubID
+	AttackerAsCP_Auth(x);
+
+AttackerAsCP_Auth(hub_ip) = 
+	newnonce.Attacker_nonce -> 
+	wifi!hub_ip.Attacker_nonce ->  
+	wifi?AttackerIP.x -> // x - hash(x)	
+    setAttackerAuth{attackerAuth=true} ->
+	AttackerAsCP_SendRequest(hub_ip, x);		
+
+AttackerAsCP_SendRequest(hub_ip, hash_x) = 
+	AttackerAsCP_SendSearchLightRequest(hub_ip, hash_x) []
+	AttackerAsCP_SendJoinNearestDeviceRequest(hub_ip, hash_x) []
+	AttackerAsCP_RequestLightResult(hub_ip, hash_x) []
+	AttackerAsCP_GetInfoRequest(hub_ip, hash_x);
+	
+AttackerAsCP_SendSearchLightRequest(hub_ip, hash_x) = 
+	wifi!hub_ip.hash_x.SearchLightRequest -> 
+	wifi?AttackerIP.RequestSuccess -> 
+	AttackerAsCP_SendRequest(hub_ip, hash_x);
+
+AttackerAsCP_SendJoinNearestDeviceRequest(hub_ip, hash_x) = 
+	wifi!hub_ip.hash_x.JoinNearestDeviceRequest -> 
+	wifi?AttackerIP.RequestSuccess-> 
+	AttackerAsCP_SendRequest(hub_ip, hash_x);
+	
+AttackerAsCP_RequestLightResult(hub_ip, hash_x) = 
+	wifi!hub_ip.hash_x.RequestLightResult -> 
+	wifi?AttackerIP.LightNo.LightName -> 
+	AttackerAsCP_SendControlRequest(hub_ip, hash_x);
+	
+AttackerAsCP_GetInfoRequest(hub_ip, hash_x) = 
+	wifi!hub_ip.hash_x.GetInfoRequest -> 
+	wifi?CPIP.Configs.Lights.Whitelist -> 
+	AttackerAsCP_SendAdminControlRequest(hub_ip, hash_x);
+	
+AttackerAsCP_SendAdminControlRequest(hub_ip, hash_x) = 
+	AttackerAsCP_GetInfoRequest(hub_ip, hash_x) [] 
+	AttackerAsCP_DeleteLightRequest(hub_ip, hash_x) [] 
+	AttackerAsCP_DeleteUserIDRequest(hub_ip, hash_x) [] 
+	AttackerAsCP_LinkButtonTrue(hub_ip, hash_x) []
+	AttackerAsCP_SendRequest(hub_ip, hash_x);
+	
+AttackerAsCP_SendControlRequest(hub_ip, hash_x) = 
+	AttackerAsCP_RequestLightResult(hub_ip, hash_x) [] 
+	AttackerAsCP_Controlcmd(hub_ip, hash_x) []
+	AttackerAsCP_SendRequest(hub_ip, hash_x);
+	
+AttackerAsCP_DeleteLightRequest(hub_ip, hash_x) = 
+	wifi!hub_ip.hash_x.DeleteLightRequest -> 
+	wifi?AttackerIP.AdminSuccess -> 
+	AttackerAsCP_SendAdminControlRequest(hub_ip, hash_x);
+	
+
+AttackerAsCP_LinkButtonTrue(hub_ip, hash_x) = 
+	wifi!hub_ip.hash_x.LinkButtonTrue -> 
+	wifi?AttackerIP.AdminSuccess -> 
+	AttackerAsCP_SendAdminControlRequest(hub_ip, hash_x);
+	
+AttackerAsCP_DeleteUserIDRequest(hub_ip, hash_x) = 
+	wifi!hub_ip.hash_x.DeleteUserIDRequest -> 
+	wifi?AttackerIP.AdminSuccess -> 
+	AttackerAsCP_SendAdminControlRequest(hub_ip, hash_x);
+	
+AttackerAsCP_Controlcmd(hub_ip, hash_x) = 
+	wifi!hub_ip.hash_x.Controlcmd -> 
+	wifi?AttackerIP.ControlCmdSuccess ->
+	AttackerAsCP_SendRequest(hub_ip, hash_x);
+	
+system = SD_Proc() ||| HS_Proc() |||  ZFE_Proc()||| CP_Proc() ||| Attacker_Proc();
+
+#define violation_attackerAsCP attackerAuth == true;
+#assert system reaches violation_attackerAsCP;
