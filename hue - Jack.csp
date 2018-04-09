@@ -1,6 +1,6 @@
 ﻿channel zigbee 0;
 channel wifi 0;
-channel attackerbuffer 3;
+channel attackerBuffer 3;
 
 enum {
 	BeaconRequest, PanID, HubID, DeviceID, AssoPermit,
@@ -15,20 +15,23 @@ enum {
 	Controlcmd, EncryptedControlcmd, ACK, ControlCmdSuccess, 
 	CP, HS, ZFE, SD, Nobody, CP_nonce, CP_hashed_nonce, 
 	Attacker_nonce, Attacker_hashed_nonce, AttackerHubID,
-	AttackerDeviceID
+	AttackerDeviceID, AttackerAuthRequest
 };
 
-var HS_Whitelist = Nobody;
-var LinkBridge = false;
+//var HS_Whitelist = Nobody;
+var cPWhitelisted = false;
+var attackerWhitelisted = false;
+var linkButton = false;
 
 var Network_HubID = Nobody;
 var New_DeviceID = Nobody;
 var Bridge_HubIP = Nobody;
-var SD_Joined_Network = false;
 
+var sDJoinedNetwork = false;
 var attackerAuth = false;
+var attackerCmdControl = false;
 var attackerAdminControl = false;
-var hijackedSD = false;
+var sDHijacked = false;
 var controlModified = false;
 
 SD_Proc() = SD_Discovery();
@@ -102,18 +105,18 @@ HS_Auth() =
 	HS_AuthFromNonce(x);
 	
 HS_AuthFromNonce(x) = 
-	if(x == CP_nonce){
-		executeCommand{LinkBridge = true} -> 
+	ifa(x == CP_nonce){
+		executeCommand{linkButton = true} -> 
 		wifi!CPIP.CP_hashed_nonce -> 
-		serverconnected{HS_Whitelist = CP_hashed_nonce} ->
-		executeCommand{LinkBridge = false} -> 
+		CPConnected{cPWhitelisted = true} ->
+		executeCommand{linkButton = false} -> 
 		HS_ReceiveRequest()
 	}
 	else{
-		executeCommand{LinkBridge = true} -> 
+		executeCommand{linkButton = true} -> 
 		wifi!AttackerIP.Attacker_hashed_nonce -> 
-		serverconnected{HS_Whitelist = Attacker_hashed_nonce} ->
-		executeCommand{LinkBridge = false} -> 
+		CPConnected{attackerWhitelisted = true} ->
+		executeCommand{linkButton = false} -> 
 		HS_ReceiveRequest()
 	};
 
@@ -142,7 +145,7 @@ SD_JoinNetwork() =
 	executeCommand.IdentifyRequest -> 
 	zigbee?DeviceID.PanID.NetworkJoinRequest -> 
 	zigbee!Network_HubID.PanID.NetworkJoinResponse -> 
-	JoinToNetwork{SD_Joined_Network = true} ->
+	JoinToNetwork{sDJoinedNetwork = true} ->
 	SD_TouchLink();
 
 
@@ -162,27 +165,27 @@ ZFE_JoinDevice() =
 	zigbee?HubID.PanID.LinkScanResponse -> 
 	zigbee!New_DeviceID.LinkIdentifyRequest -> 
 	zigbee!New_DeviceID.PanID.LinkNetworkJoinRequest -> 
-	zigbee?HubID.PanID.LinkNetworkJoinResponse -> 
+	zigbee?HubID.PanID.LinkNetworkJoinResponse ->
 	HS_ReceiveRequest();
 	
 SD_JoinDevice() = 
 	zigbee?LinkScanRequest.PanID -> 
 	zigbee!Network_HubID.PanID.LinkScanResponse -> 
-	zigbee?DeviceID.IdentifyRequest -> 
+	zigbee?DeviceID.LinkIdentifyRequest -> 
 	executeCommand.LinkIdentifyRequest -> 
 	zigbee?DeviceID.PanID.LinkNetworkJoinRequest -> 
 	zigbee!Network_HubID.PanID.LinkNetworkJoinResponse -> 
-	JoinToNetwork{SD_Joined_Network = true} ->
+	JoinToNetwork{sDJoinedNetwork = true} ->
 	SD_TouchLink();
 
 SD_TouchLink() = SD_DeviceDiscovery() [] SD_ReceiveRequest();
 	
 HS_SearchLightResponse() = 
-	if(HS_Whitelist == CP_hashed_nonce){
+	ifa(cPWhitelisted){
 		wifi!CPIP.RequestSuccess -> 
 		ZFE_JoinNetwork()
 	}
-	else if(HS_Whitelist == Attacker_hashed_nonce){
+	else ifa(attackerWhitelisted){
 		wifi!AttackerIP.RequestSuccess -> 
 		ZFE_JoinNetwork()
 	}
@@ -191,11 +194,11 @@ HS_SearchLightResponse() =
 	};
 
 HS_JoinNearestDeviceResponse() = 
-	if(HS_Whitelist == CP_hashed_nonce){
+	ifa(cPWhitelisted){
 		wifi!CPIP.RequestSuccess -> 
 		ZFE_JoinDevice()
 	}
-	else if(HS_Whitelist == Attacker_hashed_nonce){
+	else ifa(attackerWhitelisted){
 		wifi!AttackerIP.RequestSuccess -> 
 		ZFE_JoinDevice()
 	}
@@ -299,7 +302,7 @@ CP_LinkButtonTrue(hash_x) =
 
 HS_LinkButtonTrue() = 
 	wifi?HubIP.x.LinkButtonTrue -> 
-	executeCommand{LinkBridge = true} -> 
+	executeCommand{linkButton = true} -> 
 	HS_AdminSuccessResponse();
 
 
@@ -315,11 +318,11 @@ HS_Controlcmd() =
 	
 
 HS_LightResultResponse() = 
-	if(HS_Whitelist == CP_hashed_nonce){
+	ifa(cPWhitelisted){
 		wifi!CPIP.LightNo.LightName -> 
 		HS_ReceiveControlRequest()
 	}
-	else if(HS_Whitelist == Attacker_hashed_nonce){
+	else ifa(attackerWhitelisted){
 		wifi!AttackerIP.LightNo.LightName -> 
 		HS_ReceiveControlRequest()
 	}
@@ -329,12 +332,12 @@ HS_LightResultResponse() =
 	
 
 HS_GetInfoResponse() = 
-	if(HS_Whitelist == CP_hashed_nonce){
-		wifi!CPIP.LightNo.LightName -> 
+	ifa(cPWhitelisted){
+		wifi!CPIP.Configs.Lights.Whitelist -> 
 		HS_ReceiveControlRequest()
 	}
-	else if(HS_Whitelist == Attacker_hashed_nonce){
-		wifi!AttackerIP.LightNo.LightName -> 
+	else ifa(attackerWhitelisted){
+		wifi!AttackerIP.Configs.Lights.Whitelist -> 
 		HS_ReceiveControlRequest()
 	}
 	else{
@@ -343,11 +346,11 @@ HS_GetInfoResponse() =
 
 
 HS_AdminSuccessResponse() = 
-	if(HS_Whitelist == CP_hashed_nonce){
+	ifa(cPWhitelisted){
 		wifi!CPIP.AdminSuccess -> 
 		HS_ReceiveRequest()
 	}
-	else if(HS_Whitelist == Attacker_hashed_nonce){
+	else ifa(attackerWhitelisted){
 		wifi!AttackerIP.AdminSuccess -> 
 		HS_ReceiveRequest()
 	}
@@ -356,13 +359,13 @@ HS_AdminSuccessResponse() =
 	};
 	
 HS_ControlSuccessResponse() = 
-	if(HS_Whitelist == CP_hashed_nonce){
+	ifa(cPWhitelisted){
 		zigbee!New_DeviceID.PanID.EncryptedControlcmd -> 
 		zigbee?HubID.ACK -> 
 		wifi!CPIP.ControlCmdSuccess ->
 		HS_ReceiveRequest()
 	}
-	else if(HS_Whitelist == Attacker_hashed_nonce){
+	else ifa(attackerWhitelisted){
 		zigbee!New_DeviceID.PanID.EncryptedControlcmd -> 
 		zigbee?HubIP.ACK -> 
 		wifi!AttackerIP.ControlCmdSuccess ->
@@ -394,13 +397,29 @@ AttackerAsCP() =
 	wifi?AttackerIP.ServerName.hub_ip.hub_id ->
 	wifi!hub_ip.Attacker_nonce ->  
 	wifi?AttackerIP.Attacker_hashed_nonce ->
-	attacker_authorized{attackerAuth = true} ->
-	AttackerAdminControl(hub_ip, Attacker_hashed_nonce);
+	authAttacker{attackerAuth = true} ->
+	AttackerControl(hub_ip, Attacker_hashed_nonce);
 	
-//AttackerAsHub() = 
-//	wifi?UPnPMsearchRequest.CPIP -> 
-//	wifi!CPIP.ServerName.AttackerIP.AttackerHubID -> 
-//	Attacker_Proc();
+AttackerControl(hub_ip, hash_x) = 
+	AttackerAdminControl(hub_ip, hash_x) []
+	AttackerCmdControl(hub_ip, hash_x);
+
+AttackerCmdControl(hub_ip, hash_x) = 
+	wifi!hub_ip.hash_x.RequestLightResult -> 
+	wifi?AttackerIP.LightNo.LightName -> 
+	attackerControl{attackerCmdControl = true} ->
+	wifi!hub_ip.hash_x.Controlcmd -> 
+	wifi?AttackerIP.ControlCmdSuccess ->
+//	attackerControl{attackerCmdControl = true} ->
+	Attacker_Proc();
+
+AttackerAdminControl(hub_ip, hash_x) = 
+	wifi!hub_ip.hash_x.GetInfoRequest -> 
+	wifi?AttackerIP.Configs.Lights.Whitelist ->
+	wifi!hub_ip.hash_x.DeleteUserIDRequest ->
+	wifi?AttackerIP.AdminSuccess -> 
+//	removeCPAccess{cPWhitelisted = false; attackerAdminControl = true} ->
+	Attacker_Proc();
 
 // Using TouchLink Protocol
 AttackerAsHub() = 
@@ -408,11 +427,10 @@ AttackerAsHub() =
 	zigbee?PanID.benign_device_id.AssoPermit ->
 	zigbee!LinkScanRequest.PanID -> 
 	zigbee?AttackerHubID.PanID.LinkScanResponse -> 
-//	attackerbuffer!benign_device_id.LinkIdentifyRequest ->
 	zigbee!benign_device_id.LinkIdentifyRequest -> 
 	zigbee!benign_device_id.PanID.LinkNetworkJoinRequest -> 
 	zigbee?AttackerHubID.PanID.LinkNetworkJoinResponse -> 
-	hijack_connected_sd{hijackedSD = true} ->
+	hijack_connected_sd{sDHijacked = true} ->
 	Attacker_Proc();
 	
 //AttackerAsSD() = 
@@ -422,130 +440,34 @@ AttackerAsHub() =
 //	zigbee!PanID.AttackerDeviceID ->
 //	SD_JoinNetwork();
 
-
 AttackerRelay() = 
-	attackerbuffer?x.y.Controlcmd -> wifi!x.y.Controlcmd{controlModified = true} -> Attacker_Proc()
-	[] wifi?x.y.z -> attackerbuffer!x.y.z -> Attacker_Proc();
+	attackerBuffer?x.y.AttackerAuthRequest -> AttackerControl(x, y)
+	[] attackerBuffer?x.y.Controlcmd -> wifi!x.y.Controlcmd{controlModified = true} -> Attacker_Proc()
+	[] wifi?x.y.z -> attackerBuffer!x.y.z -> Attacker_Proc();
 //               [] network?y.z -> attackerBuffer!y.z -> AttackerProc() 
 //               [] network?attacker_server_key.y -> network!y -> AttackerProc() 
 //               [] network?y.z -> network!attacker_server_key.y.z -> AttackerProc();
 
-AttackerCmdControl(hub_ip, hash_x) = 
-	wifi!hub_ip.hash_x.Controlcmd -> 
-	wifi?AttackerIP.ControlCmdSuccess ->
-	Attacker_Proc();
-
-AttackerAdminControl(hub_ip, hash_x) = 
-	wifi!hub_ip.hash_x.DeleteUserIDRequest -> 
-	wifi?AttackerIP.AdminSuccess -> 
-	attacker_admin_authorized{attackerAdminControl = true} ->
-	Attacker_Proc();
 	
-system = SD_Proc() ||| HS_Proc() |||  ZFE_Proc()||| CP_Proc() ||| Attacker_Proc();
-
-#define violation_unauthControl attackerAuth == true;
-#define violation_hijackDevice hijackedSD == true;
-#define violation_unauthAdmin attackerAdminControl == true;
-#define violation_modifyControl controlModified == true;
+System = SD_Proc() ||| HS_Proc() |||  ZFE_Proc()||| CP_Proc();
+System_With_Attacker = SD_Proc() ||| HS_Proc() |||  ZFE_Proc()||| CP_Proc() ||| Attacker_Proc();
 
 
-#assert system reaches violation_unauthControl;
-#assert system reaches violation_hijackDevice;
-#assert system reaches violation_unauthAdmin;
-#assert system reaches violation_modifyControl;
+#define SD_JoinedNetwork sDJoinedNetwork == true;
 
+#define Violation_AttackerAuth attackerAuth == true;
+#define Violation_UnauthAdminControl attackerAdminControl == true;
+#define Violation_UnauthCmdControl attackerCmdControl == true;
+#define Violation_ModifyControl controlModified == true;
+#define Violation_HijackDevice sDHijacked == true;
 
 
 
+#assert System deadlockfree;
+#assert System reaches SD_JoinedNetwork;
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-//
-//
-//AttackerProc() = AttackerNegotiate() [] AttackerAsServer() [] AttackerRelay() [] AttackerReNegotiate();
-//
-//AttackerRelay() = attackerBuffer?x.y -> network!attacker_server_key.x.y -> AttackerProc()
-//               [] network?y.z -> attackerBuffer!y.z -> AttackerProc() 
-//               [] network?attacker_server_key.y -> network!y -> AttackerProc() 
-//               [] network?y.z -> network!attacker_server_key.y.z -> AttackerProc();
-//
-//AttackerAsServer() = network?Client.Hello -> attackerBuffer!Client.Hello -> AttackerProc();
-//
-//AttackerAsCP_Discovery() = 
-//	wifi!UPnPMsearchRequest -> 
-//	wifi?AttackerIP.ServerName.HubIP.HubID -> 
-//	CP_Auth();
-//	attackerconnected{attacker_server_connected = true} ->
-//	AttackerConnected();
-//
-//AttackerConnected() = network?attacker_server_key.HelloRequest -> AttackerProc();
-//
-//AttackerReNegotiate() = 
-//   network!attacker_server_key.Attacker.Hello ->
-//   network?attacker_server_key.ServerHello ->
-//   network?attacker_server_key.ServerCertificate ->
-//   network?attacker_server_key.ServerKeyExchange ->
-//   network?attacker_server_key.ServerCertificateRequest ->
-//   network?attacker_server_key.ServerHelloDone ->
-//   network!attacker_server_key.Attacker.Certificate ->
-//   network!attacker_server_key.Attacker.KeyExchange ->
-//   network!attacker_server_key.Attacker.CertificateVerify ->
-//   network!attacker_server_key.Attacker.ChangeCipherSpec ->
-//   network!attacker_server_key.Attacker.Finished ->
-//   network?attacker_server_key.ServerChangeCipherSpec ->
-//   network?attacker_server_key.ServerFinished ->
-//   AttackerConnected();
-//
-//SpecificAttacker = 
-//   network?Client.Hello -> attackerBuffer!Client.Hello ->
-//   network!Attacker.Hello ->
-//   network?ServerHello ->
-//   network?ServerCertificate ->
-//   network?ServerKeyExchange ->
-//   network?ServerCertificateRequest ->
-//   network?ServerHelloDone ->
-//   network!Attacker.Certificate ->
-//   network!Attacker.KeyExchange ->
-//   network!Attacker.CertificateVerify ->
-//   network!Attacker.ChangeCipherSpec ->
-//   network!Attacker.Finished ->
-//   network?ServerChangeCipherSpec ->
-//   network?ServerFinished ->
-//   attackerconnected{attacker_server_connected = true} ->
-//   network?attacker_server_key.HelloRequest ->
-//   attackerBuffer?Client.Hello ->
-//   network!attacker_server_key.Client.Hello -> 
-//   SpecificRelay();
-//
-//SpecificRelay() = network?attacker_server_key.y -> network!y -> SpecificRelay()
-//               [] network?x.z -> network!attacker_server_key.x.z -> SpecificRelay();
-//               
-               
-               
-//zigbeeSystem = SD_Proc() ||| Hub_Proc();
-//wifiSystem = Hub_Proc()||| CP_Proc();
-//
-//#assert zigbeeSystem deadlockfree; 
-//#assert wifiSystem deadlockfree; 				
-
-//system = SD_Proc() ||| HS_Proc() |||  ZFE_Proc()||| CP_Proc();
-
-//#assert system deadlockfree;
+#assert System_With_Attacker reaches Violation_AttackerAuth;
+#assert System_With_Attacker reaches Violation_UnauthAdminControl;
+#assert System_With_Attacker reaches Violation_UnauthCmdControl;
+#assert System_With_Attacker reaches Violation_ModifyControl;
+#assert System_With_Attacker reaches Violation_HijackDevice;
