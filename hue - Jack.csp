@@ -27,7 +27,8 @@ var Network_HubID = Nobody;
 var New_DeviceID = Nobody;
 var Bridge_HubIP = Nobody;
 
-var sDJoinedNetwork = false;
+var sDJoinedZigbeeNetwork = false;
+var attackerJoinedZigbeeNetwork = false;
 var attackerAuth = false;
 var attackerCmdControl = false;
 var attackerAdminControl = false;
@@ -145,7 +146,7 @@ SD_JoinNetwork() =
 	executeCommand.IdentifyRequest -> 
 	zigbee?DeviceID.PanID.NetworkJoinRequest -> 
 	zigbee!Network_HubID.PanID.NetworkJoinResponse -> 
-	JoinToNetwork{sDJoinedNetwork = true} ->
+	JoinToNetwork{sDJoinedZigbeeNetwork = true} ->
 	SD_TouchLink();
 
 
@@ -175,7 +176,7 @@ SD_JoinDevice() =
 	executeCommand.LinkIdentifyRequest -> 
 	zigbee?DeviceID.PanID.LinkNetworkJoinRequest -> 
 	zigbee!Network_HubID.PanID.LinkNetworkJoinResponse -> 
-	JoinToNetwork{sDJoinedNetwork = true} ->
+	JoinToNetwork{sDJoinedZigbeeNetwork = true} ->
 	SD_TouchLink();
 
 SD_TouchLink() = SD_DeviceDiscovery() [] SD_ReceiveRequest();
@@ -376,7 +377,8 @@ SD_Controlcmd() =
 Attacker_Proc() = 
 	AttackerAsCP() [] 
 	AttackerAsHub() []
-	AttackerRelay();
+	AttackerRelay() []
+	AttackerAsSD();
 
 
 // Attacker behaviour
@@ -420,12 +422,17 @@ AttackerAsHub() =
 	hijack_connected_sd{sDHijacked = true} ->
 	Attacker_Proc();
 	
-//AttackerAsSD() = 
-//	zigbee!BeaconRequest -> 
-//	zigbee?PanID.hub_id.AssoPermit -> 
-//	NetworkHubDiscovered{Network_HubID = hub_id} ->
-//	zigbee!PanID.AttackerDeviceID ->
-//	SD_JoinNetwork();
+AttackerAsSD() = 
+	zigbee!BeaconRequest -> 
+	zigbee?PanID.hub_id.AssoPermit -> 
+	zigbee!PanID.AttackerDeviceID ->
+	zigbee?ScanRequest.PanID -> 
+	zigbee!hub_id.PanID.ScanResponse -> 
+	zigbee?AttackerDeviceID.IdentifyRequest -> 
+	zigbee?AttackerDeviceID.PanID.NetworkJoinRequest -> 
+	zigbee!hub_id.PanID.NetworkJoinResponse -> 
+	JoinToNetwork{attackerJoinedZigbeeNetwork = true} ->
+	Attacker_Proc();
 
 AttackerRelay() = 
 	attackerBuffer?x.y.AttackerAuthRequest -> AttackerControl(x, y)
@@ -440,14 +447,14 @@ System = SD_Proc() ||| HS_Proc() |||  ZFE_Proc()||| CP_Proc();
 System_With_Attacker = SD_Proc() ||| HS_Proc() |||  ZFE_Proc()||| CP_Proc() ||| Attacker_Proc();
 
 
-#define SD_JoinedNetwork sDJoinedNetwork == true;
+#define SD_JoinedNetwork sDJoinedZigbeeNetwork == true;
 
 #define Violation_AttackerAuth attackerAuth == true;
 #define Violation_UnauthAdminControl attackerAdminControl == true;
 #define Violation_UnauthCmdControl attackerCmdControl == true;
 #define Violation_ModifyControl controlModified == true;
-#define Violation_HijackDevice sDHijacked == true;
-
+#define Violation_HijackDevice sDJoinedZigbeeNetwork && sDHijacked;
+#define Violation_AttackerJoinHub attackerJoinedZigbeeNetwork == true;
 
 
 #assert System deadlockfree;
@@ -458,3 +465,4 @@ System_With_Attacker = SD_Proc() ||| HS_Proc() |||  ZFE_Proc()||| CP_Proc() ||| 
 #assert System_With_Attacker reaches Violation_UnauthCmdControl;
 #assert System_With_Attacker reaches Violation_ModifyControl;
 #assert System_With_Attacker reaches Violation_HijackDevice;
+#assert System_With_Attacker reaches Violation_AttackerJoinHub;
