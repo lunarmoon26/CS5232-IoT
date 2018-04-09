@@ -3,8 +3,11 @@ channel network[3] 0; // 0 as openwifi, 1 as wifi, 2 as attacker wifi
 
 channel wifi0 0;
 
-var c = [0, 1, 2]; // 0 as openwifi, 1 as wifi, 2 as attacker wifi
-var ch = 0;
+enum {
+	openwifi, wifi, attackerwifi
+};
+
+var ch = openwifi;
 var executedBy = Nobody;
 
 var attacker_get_SDInfo = false;
@@ -37,7 +40,7 @@ AttackerAsCP() = wifi0?x.LifxWiFiBeacon.SSID.BSSID ->
 				 wifi0!SSID.OpenSystemAuthenticationRequest ->
 				 wifi0?AssociationResponse -> AttackerAsCPDiscovery();
 					
-AttackerAsCPDiscovery() = ifa(ch == c[0]) {
+AttackerAsCPDiscovery() = ifa(ch == openwifi) {
 	AttackerAsCPConfiguration()
 } else{
 	AttackerAsCPConfigured()
@@ -85,7 +88,7 @@ CPDiscovery0() = wifi0?x.LifxWiFiBeacon.SSID.BSSID ->
 				 wifi0!SSID.OpenSystemAuthenticationRequest ->
 				 wifi0?AssociationResponse -> CPDiscovery(); 
 
-CPDiscovery() = ifa(ch == c[0]){CPConfiguration()}else {CPConfigured()};
+CPDiscovery() = ifa(ch == openwifi){CPConfiguration()}else {CPConfigured()};
 
 CPConfiguration() = network[ch]!CP.GetService -> network[ch]?StateService -> CPDirectConnect();
   
@@ -97,7 +100,7 @@ CPConfigured() = network[ch]!CP.GetService -> network[ch]?StateService.Configure
 
 // Configuration on Username and Password when communicating through openwifi
 CPConfigWifi() =
-  ifa(ch == c[0]) { network[ch]!Station.Username.Password -> 
+  ifa(ch == openwifi) { network[ch]!Station.Username.Password -> 
     				network[ch]?Station.Username.PasswordEncoded -> CPDiscovery()
   } else { CPDiscovery()};
 
@@ -116,7 +119,7 @@ SDDiscovery0() = wifi0!SD.LifxWiFiBeacon.SSID.BSSID ->
 				 wifi0?SSID.OpenSystemAuthenticationRequest ->
 				 wifi0!AssociationResponse ->SDDiscovery();
 
-SDDiscovery() = ifa(ch == c[0]){SDConfiguration()} else{SDConfigured()};
+SDDiscovery() = ifa(ch == openwifi){SDConfiguration()} else{SDConfigured()};
 
 // Case 1: communicate through openwifi
 SDConfiguration() = network[ch]?x.GetService -> network[ch]!StateService -> SDDirectConnect();
@@ -128,7 +131,7 @@ SDConfigured() = network[ch]?x.GetService -> network[ch]!StateService.Configured
 SystemStage1 = CPDiscovery0()|||SDDiscovery0();  
 
 
-SDConfigWifi() = ifa (ch == c[0]) {  network[ch]?Station.x.y -> SDConnectToWifi(x, y) } 
+SDConfigWifi() = ifa (ch == openwifi) {  network[ch]?Station.x.y -> SDConnectToWifi(x, y) } 
 				 else { SDDiscovery()};
 				 
 // Check whether username and password are correct.
@@ -136,9 +139,9 @@ SDConfigWifi() = ifa (ch == c[0]) {  network[ch]?Station.x.y -> SDConnectToWifi(
 // if no, go back to discovery stage and communicate through openwifi 
 
 SDConnectToWifi(x, y) = if (x == Username && y == Password) {
-    network[ch]!Station.Username.PasswordEncoded -> changeChannel{ch = c[1]} -> SDDiscovery()
+    network[ch]!Station.Username.PasswordEncoded -> changeChannel{ch = wifi} -> SDDiscovery()
   } else if(x == AttackerWifiUsername && y == AttackerWifiPassword){
-    network[ch]!Station.AttackerWifiUsername.AttackerWifiPasswordEncoded -> changeChannel{ch = c[2]} -> SDDiscovery()
+    network[ch]!Station.AttackerWifiUsername.AttackerWifiPasswordEncoded -> changeChannel{ch = attackerwifi} -> SDDiscovery()
   }else { SDDiscovery() };
 
 SystemStage2 = CPConfigWifi() ||| SDConfigWifi(); 
@@ -155,17 +158,21 @@ SDGetLights() = network[ch]?x.GetLights -> network[ch]!LightsState ->
 					  executeCommand{executedBy = x} -> SDReceiveCommand();
 
 SystemStage3 = SDReceiveCommand() ||| CPSendCommand();
-	
-system = CPProc() ||| SDProc() ||| AttackerProc();  
 
-#define violation_wifi_disable ch == c[2];
+system = CPProc() ||| SDProc();
+
+system_with_Attacker = CPProc() ||| SDProc() ||| AttackerProc();  
+
+#define violation_wifi_disabled ch == attackerwifi;
 #define violation_controlled_by_attacker executedBy == Attacker;
 #define violation_getSDInfo attacker_get_SDInfo == true;
 #define violation_get_wifiInfo attacker_get_wifiInfo == true;
 
-#assert system deadlockfree; 
-#assert system reaches violation_wifi_disable;
-#assert system reaches violation_controlled_by_attacker;
-#assert system reaches violation_getSDInfo;
-#assert system reaches violation_get_wifiInfo;
+#assert system_with_Attacker deadlockfree; 
+#assert system_with_Attacker reaches violation_wifi_disabled;
+#assert system_with_Attacker reaches violation_controlled_by_attacker;
+#assert system_with_Attacker reaches violation_getSDInfo;
+#assert system_with_Attacker reaches violation_get_wifiInfo;
+
+#assert system deadlockfree;
 
