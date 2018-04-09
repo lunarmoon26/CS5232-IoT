@@ -143,7 +143,7 @@ SD_JoinNetwork() =
 	zigbee?DeviceID.PanID.NetworkJoinRequest -> 
 	zigbee!Network_HubID.PanID.NetworkJoinResponse -> 
 	JoinToNetwork{SD_Joined_Network = true} ->
-	SD_ReceiveRequest();
+	SD_TouchLink();
 
 
 
@@ -173,7 +173,9 @@ SD_JoinDevice() =
 	zigbee?DeviceID.PanID.LinkNetworkJoinRequest -> 
 	zigbee!Network_HubID.PanID.LinkNetworkJoinResponse -> 
 	JoinToNetwork{SD_Joined_Network = true} ->
-	SD_ReceiveRequest();
+	SD_TouchLink();
+
+SD_TouchLink() = SD_DeviceDiscovery() [] SD_ReceiveRequest();
 	
 HS_SearchLightResponse() = 
 	if(HS_Whitelist == CP_hashed_nonce){
@@ -406,9 +408,10 @@ AttackerAsHub() =
 	zigbee?PanID.benign_device_id.AssoPermit ->
 	zigbee!LinkScanRequest.PanID -> 
 	zigbee?AttackerHubID.PanID.LinkScanResponse -> 
-//	zigbee!benign_device_id.LinkIdentifyRequest -> 
-//	zigbee!benign_device_id.PanID.LinkNetworkJoinRequest -> 
-//	zigbee?AttackerHubID.PanID.LinkNetworkJoinResponse -> 
+//	attackerbuffer!benign_device_id.LinkIdentifyRequest ->
+	zigbee!benign_device_id.LinkIdentifyRequest -> 
+	zigbee!benign_device_id.PanID.LinkNetworkJoinRequest -> 
+	zigbee?AttackerHubID.PanID.LinkNetworkJoinResponse -> 
 	hijack_connected_sd{hijackedSD = true} ->
 	Attacker_Proc();
 	
