@@ -15,7 +15,7 @@ enum {
 	Controlcmd, EncryptedControlcmd, ACK, ControlCmdSuccess, 
 	CP, HS, ZFE, SD, Nobody, CP_nonce, CP_hashed_nonce, 
 	Attacker_nonce, Attacker_hashed_nonce, AttackerHubID,
-	AttackerDeviceID, AttackerAuthRequest
+	AttackerDeviceID, AttackerReplay
 };
 
 //var HS_Whitelist = Nobody;
@@ -185,26 +185,22 @@ HS_SearchLightResponse() =
 		wifi!CPIP.RequestSuccess -> 
 		ZFE_JoinNetwork()
 	}
-	else ifa(attackerWhitelisted){
+	[] ifa(attackerWhitelisted){
 		wifi!AttackerIP.RequestSuccess -> 
 		ZFE_JoinNetwork()
 	}
-	else{
-		HS_ReceiveRequest()
-	};
+	[] HS_ReceiveRequest();
 
 HS_JoinNearestDeviceResponse() = 
 	ifa(cPWhitelisted){
 		wifi!CPIP.RequestSuccess -> 
 		ZFE_JoinDevice()
 	}
-	else ifa(attackerWhitelisted){
+	[] ifa(attackerWhitelisted){
 		wifi!AttackerIP.RequestSuccess -> 
 		ZFE_JoinDevice()
 	}
-	else{
-		HS_ReceiveRequest()
-	};
+	[] HS_ReceiveRequest();
 
 CP_SendRequest(hash_x) = 
 	CP_SendSearchLightRequest(hash_x) []
@@ -322,41 +318,35 @@ HS_LightResultResponse() =
 		wifi!CPIP.LightNo.LightName -> 
 		HS_ReceiveControlRequest()
 	}
-	else ifa(attackerWhitelisted){
+	[] ifa(attackerWhitelisted){
 		wifi!AttackerIP.LightNo.LightName -> 
 		HS_ReceiveControlRequest()
 	}
-	else{
-		HS_ReceiveControlRequest()
-	};
+	[] HS_ReceiveControlRequest();
 	
 
 HS_GetInfoResponse() = 
 	ifa(cPWhitelisted){
 		wifi!CPIP.Configs.Lights.Whitelist -> 
-		HS_ReceiveControlRequest()
+		HS_ReceiveAdminControlRequest()
 	}
-	else ifa(attackerWhitelisted){
+	[] ifa(attackerWhitelisted){
 		wifi!AttackerIP.Configs.Lights.Whitelist -> 
-		HS_ReceiveControlRequest()
+		HS_ReceiveAdminControlRequest()
 	}
-	else{
-		HS_ReceiveControlRequest()
-	};
+	[] HS_ReceiveAdminControlRequest();
 
 
 HS_AdminSuccessResponse() = 
 	ifa(cPWhitelisted){
 		wifi!CPIP.AdminSuccess -> 
 		HS_ReceiveRequest()
-	}
-	else ifa(attackerWhitelisted){
+	} 
+	[] ifa(attackerWhitelisted){
 		wifi!AttackerIP.AdminSuccess -> 
 		HS_ReceiveRequest()
 	}
-	else{
-		HS_ReceiveRequest()
-	};
+	[] HS_ReceiveRequest();
 	
 HS_ControlSuccessResponse() = 
 	ifa(cPWhitelisted){
@@ -365,15 +355,14 @@ HS_ControlSuccessResponse() =
 		wifi!CPIP.ControlCmdSuccess ->
 		HS_ReceiveRequest()
 	}
-	else ifa(attackerWhitelisted){
+	[] ifa(attackerWhitelisted){
 		zigbee!New_DeviceID.PanID.EncryptedControlcmd -> 
+//		attackerControl{attackerCmdControl = true} ->
 		zigbee?HubIP.ACK -> 
 		wifi!AttackerIP.ControlCmdSuccess ->
 		HS_ReceiveRequest()
-	}
-	else{
-		HS_ReceiveRequest()
-	};
+	} 
+	[] HS_ReceiveRequest();
 
 
 SD_Controlcmd() = 
@@ -407,7 +396,6 @@ AttackerControl(hub_ip, hash_x) =
 AttackerCmdControl(hub_ip, hash_x) = 
 	wifi!hub_ip.hash_x.RequestLightResult -> 
 	wifi?AttackerIP.LightNo.LightName -> 
-	attackerControl{attackerCmdControl = true} ->
 	wifi!hub_ip.hash_x.Controlcmd -> 
 	wifi?AttackerIP.ControlCmdSuccess ->
 //	attackerControl{attackerCmdControl = true} ->
@@ -418,7 +406,7 @@ AttackerAdminControl(hub_ip, hash_x) =
 	wifi?AttackerIP.Configs.Lights.Whitelist ->
 	wifi!hub_ip.hash_x.DeleteUserIDRequest ->
 	wifi?AttackerIP.AdminSuccess -> 
-//	removeCPAccess{cPWhitelisted = false; attackerAdminControl = true} ->
+	removeCPAccess{cPWhitelisted = false; attackerAdminControl = true} ->
 	Attacker_Proc();
 
 // Using TouchLink Protocol
@@ -442,8 +430,8 @@ AttackerAsHub() =
 
 AttackerRelay() = 
 	attackerBuffer?x.y.AttackerAuthRequest -> AttackerControl(x, y)
-	[] attackerBuffer?x.y.Controlcmd -> wifi!x.y.Controlcmd{controlModified = true} -> Attacker_Proc()
-	[] wifi?x.y.z -> attackerBuffer!x.y.z -> Attacker_Proc();
+	[] attackerBuffer?x.y.Controlcmd.AttackerReplay -> wifi!x.y.Controlcmd{controlModified = true} -> Attacker_Proc()
+	[] wifi?x.y.z -> attackerBuffer!x.y.z.AttackerReplay -> Attacker_Proc();
 //               [] network?y.z -> attackerBuffer!y.z -> AttackerProc() 
 //               [] network?attacker_server_key.y -> network!y -> AttackerProc() 
 //               [] network?y.z -> network!attacker_server_key.y.z -> AttackerProc();
