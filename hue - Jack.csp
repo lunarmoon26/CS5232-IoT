@@ -15,7 +15,7 @@ enum {
 	Controlcmd, EncryptedControlcmd, ACK, ControlCmdSuccess, 
 	CP, HS, ZFE, SD, Nobody, CP_nonce, CP_hashed_nonce, 
 	Attacker_nonce, Attacker_hashed_nonce, AttackerHubID,
-	AttackerDeviceID, AttackerReplay
+	AttackerDeviceID, AttackerHttpReplay
 };
 
 //var HS_Whitelist = Nobody;
@@ -432,15 +432,18 @@ AttackerAsSD() =
 	zigbee?AttackerDeviceID.PanID.NetworkJoinRequest -> 
 	zigbee!hub_id.PanID.NetworkJoinResponse -> 
 	JoinToNetwork{attackerJoinedZigbeeNetwork = true} ->
+	AttackerSDConnected(hub_id);
+
+AttackerSDConnected(hub_id) =
+	zigbee?AttackerDeviceID.PanID.EncryptedControlcmd -> 
+	zigbee!hub_id.ACK -> 
 	Attacker_Proc();
 
 AttackerRelay() = 
-	attackerBuffer?x.y.AttackerAuthRequest -> AttackerControl(x, y)
-	[] attackerBuffer?x.y.Controlcmd.AttackerReplay -> wifi!x.y.Controlcmd{controlModified = true} -> Attacker_Proc()
-	[] wifi?x.y.z -> attackerBuffer!x.y.z.AttackerReplay -> Attacker_Proc();
-//               [] network?y.z -> attackerBuffer!y.z -> AttackerProc() 
-//               [] network?attacker_server_key.y -> network!y -> AttackerProc() 
-//               [] network?y.z -> network!attacker_server_key.y.z -> AttackerProc();
+	attackerBuffer?HubIP.y.Controlcmd.AttackerHttpReplay -> wifi!HubIP.y.Controlcmd{controlModified = true} -> Attacker_Proc()
+	[] attackerBuffer?DeviceID.y.EncryptedControlcmd.AttackerHttpReplay -> zigbee!DeviceID.y.EncryptedControlcmd{controlModified = true} -> Attacker_Proc()
+	[] zigbee?x.y.z -> attackerBuffer!x.y.z.AttackerHttpReplay -> Attacker_Proc()
+	[] wifi?x.y.z -> attackerBuffer!x.y.z.AttackerHttpReplay -> Attacker_Proc();
 
 	
 System = SD_Proc() ||| HS_Proc() |||  ZFE_Proc()||| CP_Proc();
@@ -455,6 +458,7 @@ System_With_Attacker = SD_Proc() ||| HS_Proc() |||  ZFE_Proc()||| CP_Proc() ||| 
 #define Violation_ModifyControl controlModified == true;
 #define Violation_HijackDevice sDJoinedZigbeeNetwork && sDHijacked;
 #define Violation_AttackerJoinHub attackerJoinedZigbeeNetwork == true;
+// Joined and Hijack SD - true
 
 
 #assert System deadlockfree;
