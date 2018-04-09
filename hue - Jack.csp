@@ -357,8 +357,7 @@ HS_ControlSuccessResponse() =
 	}
 	[] ifa(attackerWhitelisted){
 		zigbee!New_DeviceID.PanID.EncryptedControlcmd -> 
-//		attackerControl{attackerCmdControl = true} ->
-		zigbee?HubIP.ACK -> 
+		zigbee?HubID.ACK -> 
 		wifi!AttackerIP.ControlCmdSuccess ->
 		HS_ReceiveRequest()
 	} 
@@ -398,7 +397,7 @@ AttackerCmdControl(hub_ip, hash_x) =
 	wifi?AttackerIP.LightNo.LightName -> 
 	wifi!hub_ip.hash_x.Controlcmd -> 
 	wifi?AttackerIP.ControlCmdSuccess ->
-//	attackerControl{attackerCmdControl = true} ->
+	attackerControl{attackerCmdControl = true} ->
 	Attacker_Proc();
 
 AttackerAdminControl(hub_ip, hash_x) = 
