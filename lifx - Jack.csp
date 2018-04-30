@@ -154,11 +154,11 @@ SDConfigWifi() = network[ch_openwifi]?Station.x.y -> SDConnectToWifi(x, y);
 SDConnectToWifi(x, y) = 
   ifa(x == Username && y == Password) {
     network[ch_openwifi]!Station.Username.PasswordEncoded -> 
-    changeChannel{sd_ch = ch_wifi; sd_turnoff_openwifi = true;} -> SDReceiveCommand()
+    connectToHomeWifi{sd_ch = ch_wifi; sd_turnoff_openwifi = true;} -> SDReceiveCommand()
   } 
   [] ifa(x == AttackerWifiUsername && y == AttackerWifiPassword){
     network[ch_openwifi]!Station.AttackerWifiUsername.AttackerWifiPasswordEncoded -> 
-    changeChannel{sd_ch = ch_attacker_wifi; sd_turnoff_openwifi = true;} -> SDReceiveCommand()
+    connectToAttackerWifi{sd_ch = ch_attacker_wifi; sd_turnoff_openwifi = true;} -> SDReceiveCommand()
   }
   [] SDDiscovery();
 
