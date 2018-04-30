@@ -44,7 +44,7 @@ AttackerAsCP() = wifi0?LifxWiFiBeacon.SSID.BSSID ->
 				 wifi0!SSID.OpenSystemAuthenticationRequest ->
 				 wifi0?AssociationResponse -> attackerGetSSID{ attacker_get_ssid = true } -> AttackerAsCPDiscovery() []
 				 ifa(attacker_get_ssid) { AttackerAsCPDiscovery() } []
-				 ifa(attacker_get_wifiInfo) { AttackerSendCommand() };
+				 ifa(attacker_get_wifiInfo) { attackerExecutedCmd{ attacker_executed_command = true; } -> AttackerSendCommand() };
 					
 AttackerAsCPDiscovery() = 
   ifa(!attacker_get_wifiInfo) { AttackerAsCPConfiguration() } else { AttackerAsCPConfigured() };
@@ -110,15 +110,10 @@ CPConfigured() = network[ch]!GetService -> network[ch]?StateService.Configured -
 // Stage 2: Setup connections with smart devices 
 // Configure device to connect to home wifi supplying with Username and Password (via openwifi)
 CPConfigWifi() =
-  ifa(ch == ch_openwifi) { 
+  ifa(ch == ch_openwifi || ch == ch_attacker_openwifi) { 
     network[ch]!Station.Username.Password ->
     network[ch]?Station.Username.PasswordEncoded -> changeChannel{ ch = ch_wifi } ->
-    CPDiscovery()
-  } 
-  [] ifa(ch == ch_attacker_openwifi){
-    network[ch]!Station.Username.Password ->
-    network[ch]?Station.Username.PasswordEncoded -> changeChannel{ ch = ch_attacker_wifi } ->
-    CPDiscovery()
+    CPSendCommand()
   } 
   [] CPDiscovery();
 
@@ -159,11 +154,11 @@ SDConfigWifi() = network[ch_openwifi]?Station.x.y -> SDConnectToWifi(x, y);
 SDConnectToWifi(x, y) = 
   ifa(x == Username && y == Password) {
     network[ch_openwifi]!Station.Username.PasswordEncoded -> 
-    changeChannel{sd_ch = ch_wifi; sd_turnoff_openwifi = true;} -> SDDiscovery()
+    changeChannel{sd_ch = ch_wifi; sd_turnoff_openwifi = true;} -> SDReceiveCommand()
   } 
   [] ifa(x == AttackerWifiUsername && y == AttackerWifiPassword){
     network[ch_openwifi]!Station.AttackerWifiUsername.AttackerWifiPasswordEncoded -> 
-    changeChannel{sd_ch = ch_attacker_wifi; sd_turnoff_openwifi = true;} -> SDDiscovery()
+    changeChannel{sd_ch = ch_attacker_wifi; sd_turnoff_openwifi = true;} -> SDReceiveCommand()
   }
   [] SDDiscovery();
 
