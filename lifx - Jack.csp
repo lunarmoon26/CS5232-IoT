@@ -142,9 +142,9 @@ SDDirectConnect() = SDConfigWifi() [] SDReceiveCommand();
 
 // Case 2: communicate through home wifi
 SDConfigured() = 
-  ifa(ch == ch_wifi || ch == ch_attacker_wifi) {
-    network[ch]?GetService -> network[ch]!StateService.Configured -> SDReceiveCommand() 
-  } [] Skip;
+  ifa(sd_ch == ch_wifi || sd_ch == ch_attacker_wifi) {
+    network[sd_ch]?GetService -> network[sd_ch]!StateService.Configured -> SDReceiveCommand() 
+  } [] SDDiscovery();
 
 // Stage 2: Setup connections with smart devices 
 // SD configured to connect to home wifi supplied with Username and Password (via its openwifi)
